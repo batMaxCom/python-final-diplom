@@ -117,3 +117,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+.env
+.idea
+__pycache__
+venv
+
+backend/__pycache__
+users/__pycache__
