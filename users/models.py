@@ -38,6 +38,7 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
@@ -75,6 +76,21 @@ class User(AbstractUser):
             'Unselect this instead of deleting accounts.'
         ),
     )
+    is_verified = models.BooleanField(
+        _('Is verified'),
+        default=False,
+        help_text='Указывает, что адрес электронной почты подтвержден.'
+    )
+    changed_password_date = models.DateTimeField(
+        _('changed_password_date'),
+        auto_now_add=True,
+        blank=True,
+        null=True
+    )
+    code = models.CharField(
+        _('Verification code'), max_length=6, blank=True, null=True)
+
+    cart_session_key = models.IntegerField(verbose_name='Ключ корзины сессии пользователя', blank=True, null=True)
     type = models.CharField(verbose_name='Тип пользователя', choices=USER_TYPE_CHOICES, max_length=5, default='buyer')
 
     def __str__(self):

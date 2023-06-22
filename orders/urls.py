@@ -25,6 +25,6 @@ GET /api/v1/partner/order/124/?token=b39d0f93f9e895b82f1724832b7c186a,
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # path('api/v1/', include('backend.urls', namespace='backend')),
-    path('api/v1/', include('users.urls', namespace='users'))
+    path('api/v1/', include('backend.urls', namespace='backend')),
+    path('api/v1/', include('users.urls', namespace='users')),
 ]

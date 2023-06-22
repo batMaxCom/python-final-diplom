@@ -1,3 +1,19 @@
 from django.contrib import admin
+from users import models
 
-# Register your models here.
+
+
+@admin.register(models.User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ('email', 'last_login',
+                    'is_active', 'is_staff', 'is_superuser', 'type')
+    fields = ('company', 'position', 'is_active', 'is_staff', 'is_superuser', 'is_verified', 'code', 'type')
+    list_display_links = ('email',)
+    readonly_fields = ('last_login', 'email', )
+    search_fields = ('email', 'first_name', 'last_name',)
+    list_filter = (
+        ('is_active', admin.BooleanFieldListFilter),
+        ('is_staff', admin.BooleanFieldListFilter),
+        ('is_superuser', admin.BooleanFieldListFilter),
+        ('last_login', admin.DateFieldListFilter),
+    )
