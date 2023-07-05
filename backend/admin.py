@@ -52,7 +52,3 @@ class ParameterAdmin(admin.ModelAdmin):
     list_display = [field.name for field in Parameter._meta.fields]
     inlines = [ProductParameterInline, ]
 
-
-@admin.register(Contact)
-class ContactAdmin(admin.ModelAdmin):
-    list_display = [field.name for field in Contact._meta.fields]

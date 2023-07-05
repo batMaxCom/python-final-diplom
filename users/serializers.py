@@ -1,18 +1,21 @@
+from smtplib import SMTPRecipientsRefused, SMTPDataError
+
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.datastructures import MultiValueDictKeyError
 
 from rest_framework import serializers
 
-from users.models import User
-from users.utils import generate_code, send_activation_email
+from users.models import User, Contact
+from users.utils import generate_code, verifity_email_code
 
+error_messages = {
+    "blank": "Поле не может быть пустым.",
+    "required": "Это поле обязательно для заполнения.",
+    "invalid": "Неверно заполненные данные."
+}
 
 class AccountSerializer(serializers.ModelSerializer):
-    error_messages = {
-        "blank": "Поле не может быть пустым.",
-        "required": "Это поле обязательно для заполнения.",
-        "invalid": "Неверно заполненные данные."
-    }
+
     password = serializers.CharField(
         write_only=True,
         min_length=6,
@@ -22,7 +25,11 @@ class AccountSerializer(serializers.ModelSerializer):
             **error_messages
         }
     )
-    email = serializers.CharField(
+    email = serializers.EmailField(
+        allow_blank=False,
+        error_messages=error_messages
+    )
+    new_email = serializers.EmailField(
         allow_blank=False,
         error_messages=error_messages
     )
@@ -50,6 +57,7 @@ class AccountSerializer(serializers.ModelSerializer):
             **error_messages
         }
     )
+
     class Meta:
         abstract = True
 
@@ -69,22 +77,27 @@ class UserSerializer(AccountSerializer):
         ]
 
     def create(self, validated_data):
-        email = validated_data['email'].lower()
+        email = validated_data.get('email').lower()
+        user_type = validated_data.get('type')
         try:
             User.objects.get(email=email)
-            raise serializers.ValidationError({'email_error': "Пользователь с таким адресом уже зарегистрирован."})
+            raise serializers.ValidationError({'Status': False, 'email_error': "Пользователь с таким адресом уже зарегистрирован."})
         except ObjectDoesNotExist:
             user = User(email=email)
         try:
             if self.validated_data['password'] != self.initial_data['re_password']:
-                raise serializers.ValidationError({'password_error': "Пароли не совпадают"})
+                raise serializers.ValidationError({'Status': False, 'password_error': "Пароли не совпадают"})
         except MultiValueDictKeyError:
-            raise serializers.ValidationError({'password_error': "Вы не ввели пароль повторно."})
+            raise serializers.ValidationError({'Status': False, 'password_error': "Вы не ввели пароль повторно."})
         user.set_password(validated_data['password'])
         user.code = generate_code()
-        # user.type = validated_data['type'] # добавить тип аккаунта
+        if user_type:
+            user.type = user_type
+        try:
+            verifity_email_code(user.email, user.code)
+        except (SMTPDataError, SMTPRecipientsRefused):
+            raise serializers.ValidationError({'Status': False, 'email_error': "Проверьте верность введеногого адреса электронной почты."})
         user.save()
-        send_activation_email(user.email, user.code)
         return user
 
 
@@ -118,19 +131,33 @@ class AccountDetailSerializer(AccountSerializer):
         fields = ['id', 'email', 'is_active', 'is_verified']
 
 
-class ContactSerializer(AccountSerializer):
+class ContactSerializer(serializers.ModelSerializer):
+    type = serializers.CharField(source="user.type", read_only=True)
+    phone = serializers.CharField(
+        allow_blank=False,
+        min_length=10,
+        max_length=10,
+        error_messages={
+            "min_length": "Пожалуйста введите номер телефона, состоящий из 10 цифр, без кодов +7 или 8",
+            "max_length": "Пожалуйста введите номер телефона, состоящий из 10 цифр, без кодов +7 или 8",
+            **error_messages
+        }
+    )
+    email = serializers.EmailField(source='user.email')
+
+    class Meta:
+        model = Contact
+        fields = ('id', 'user', 'email', 'first_name', 'last_name', 'surname', 'type', 'city', 'street', 'house', 'structure', 'building', 'apartment', 'phone')
+        read_only_fields = ('id', 'type')
+
+
+class ChangeEmailSerializer(AccountSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'company', 'position', 'type']
+        fields = ['new_email']
 
 
-# class ChangeEmailSerializer(AccountSerializer):
-#     class Meta:
-#         model = User
-#         fields = ['new_email']
-
-
-# class ChangeEmailConfirmSerializer(AccountSerializer):
-#     class Meta:
-#         model = User
-#         fields = ['new_email', 'code']
+class ChangeEmailConfirmSerializer(AccountSerializer):
+    class Meta:
+        model = User
+        fields = ['new_email', 'code']

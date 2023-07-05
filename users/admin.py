@@ -1,6 +1,6 @@
 from django.contrib import admin
 from users import models
-
+from users.models import Contact
 
 
 @admin.register(models.User)
@@ -17,3 +17,7 @@ class UserAdmin(admin.ModelAdmin):
         ('is_superuser', admin.BooleanFieldListFilter),
         ('last_login', admin.DateFieldListFilter),
     )
+
+@admin.register(Contact)
+class ContactAdmin(admin.ModelAdmin):
+    list_display = [field.name for field in Contact._meta.fields]

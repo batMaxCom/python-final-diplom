@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
 # from django_rest_passwordreset.tokens import get_token_generator
 
 USER_TYPE_CHOICES = (
@@ -87,10 +88,9 @@ class User(AbstractUser):
         blank=True,
         null=True
     )
+    new_email = models.EmailField(_('new_email address'), unique=True, blank=True, null=True)
     code = models.CharField(
         _('Verification code'), max_length=6, blank=True, null=True)
-
-    cart_session_key = models.IntegerField(verbose_name='Ключ корзины сессии пользователя', blank=True, null=True)
     type = models.CharField(verbose_name='Тип пользователя', choices=USER_TYPE_CHOICES, max_length=5, default='buyer')
 
     def __str__(self):
@@ -100,3 +100,24 @@ class User(AbstractUser):
         verbose_name = 'Пользователь'
         verbose_name_plural = "Список пользователей"
         ordering = ('email',)
+
+
+class Contact(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Пользователь', related_name='contacts')
+    first_name = models.CharField(max_length=50, verbose_name='Имя')
+    last_name = models.CharField(max_length=50, verbose_name='Фамилия')
+    surname = models.CharField(max_length=50, verbose_name='Отчество', blank=True)
+    city = models.CharField(max_length=50, verbose_name='Город')
+    street = models.CharField(max_length=100, verbose_name='Улица')
+    house = models.CharField(max_length=15, verbose_name='Дом')
+    structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True)
+    building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
+    apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
+    phone = models.CharField(max_length=20, verbose_name='Телефон')
+
+    class Meta:
+        verbose_name = 'Контакт пользователя'
+        verbose_name_plural = "Список контактов пользователей"
+
+    def __str__(self):
+        return f'{self.city} {self.street} {self.house}'

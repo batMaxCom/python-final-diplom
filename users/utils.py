@@ -1,32 +1,82 @@
-import smtplib
 import string
 import random
 
 from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
 
-email_from = settings.DEFAULT_EMAIL_BACKEND
-email_from_password = settings.DEFAULT_EMAIL_BACKEND_PASSWORD
 
 def generate_code():
     code = ''.join(random.choice(string.digits) for _ in range(4))
     return code
 
 
-def send_message(email, message):
-    server = smtplib.SMTP('smtp.mail.ru', 25)
-    server.starttls()
-    server.login(email_from, email_from_password)
-    server.sendmail(email_from, email, message.encode('utf-8'))
+# TODO: v2.0
+#  Рекомендуется использовать специальные пароли для веб приложений
+#  Пример по ссылке: https://help.mail.ru/mail/security/protection/external
 
 
-def send_activation_email(email, code):
-    context = f'Код активации: {code}\n' \
+
+def verifity_email_code(user_email, user_code):
+    """
+    Отправка сообщения для подтверждения почты
+    """
+    # send an e-mail to the user
+    message = f'Код активации: {user_code}\n' \
               'Привет! Хотим убедиться, что ты не робот.\n' \
               'Введи код на странице регистрации, чтобы активировать учетную запись.'
-    send_message(email, context)
+
+    msg = EmailMultiAlternatives(
+        # title:
+        "Подтверждение почты",
+        # message:
+        message,
+        # from:
+        settings.EMAIL_HOST_USER,
+        # to:
+        [user_email]
+    )
+    msg.send()
 
 
-def send_reset_password_email(email, new_password):
-    context = f'Ваш новый пароль: {new_password}\n' \
+def reset_password(user_email, new_password):
+    """
+    Отправка сообщения для подтверждения почты
+    """
+    # send an e-mail to the user
+    message = f'Ваш новый пароль: {new_password}\n' \
+              'Пожалуйста не передавайте его посторонним лицам.\n' \
+              'Если вы не отправляли запрос на восстановление пароля, пожалуйста проигнорируйте данное сообщение.'
+
+    msg = EmailMultiAlternatives(
+        # title:
+        "Восстановление пароля",
+        # message:
+        message,
+        # from:
+        settings.EMAIL_HOST_USER,
+        # to:
+        [user_email]
+    )
+    msg.send()
+
+
+def reset_email_code(user_email, user_code):
+    """
+    Отправка сообщения для смены адреса почты
+    """
+    # send an e-mail to the user
+    message = f'Код для смены электронной почты: {user_code}\n' \
+              f'Введи код на странице подтверждения почты.' \
               'Пожалуйста не передавайте его посторонним лицам.\n'
-    send_message(email, context)
+
+    msg = EmailMultiAlternatives(
+        # title:
+        "Смена адреса почты",
+        # message:
+        message,
+        # from:
+        settings.EMAIL_HOST_USER,
+        # to:
+        [user_email]
+    )
+    msg.send()

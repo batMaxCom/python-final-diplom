@@ -148,8 +148,9 @@ REST_FRAMEWORK = {
     #         'rest_framework.permissions.IsAuthenticated',
     #     ]
 }
-
-DEFAULT_EMAIL_BACKEND = os.getenv('PROJECT_EMAIL')
-DEFAULT_EMAIL_BACKEND_PASSWORD = os.getenv('PROJECT_EMAIL_PASSWORD')
-
-# CART_SESSION_ID = 'cart'
+EMAIL_HOST = os.getenv('EMAIL_HOST')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_PORT = os.getenv('EMAIL_PORT')
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL')
+SERVER_EMAIL = EMAIL_HOST_USER

@@ -1,5 +1,5 @@
 from django.db import models
-from users.models import User
+from users.models import User, Contact
 STATE_CHOICES = (
     ('basket', 'Статус корзины'),
     ('new', 'Новый'),
@@ -21,8 +21,9 @@ class Shop(models.Model):
     url = models.URLField(verbose_name='Ссылка магазина', null=True, blank=True)
     filename = models.FileField(verbose_name='Файл с прайсом', blank=True,
                                 upload_to=None)  # Файл yaml с прайсом. Необходима возможность его обновления
+    last_update = models.DateTimeField(verbose_name='Последнее обновление прайса', null=True, blank=True)
     # state = models.BooleanField(verbose_name='статус получения заказов', default=True) #как работает?
-    user = models.OneToOneField(User, verbose_name='Поставщик', blank=True, null=True, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, verbose_name='Поставщик', on_delete=models.CASCADE)
 
     class Meta:
         verbose_name = 'Магазин'
@@ -34,7 +35,7 @@ class Shop(models.Model):
 
 class Category(models.Model):
     shops = models.ManyToManyField(Shop, verbose_name='Магазин', related_name='categories')
-    name = models.CharField(max_length=128)
+    name = models.CharField(max_length=128, verbose_name='Название категории', unique=True)
 
     class Meta:
         verbose_name = 'Категория'
@@ -58,9 +59,10 @@ class Product(models.Model):
 
 class ProductInfo(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name='Продукт', related_name='product_info')
+    external_id = models.PositiveIntegerField(verbose_name='Внешний ИД')
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, verbose_name='Магазин', related_name='product_info')
-    name = models.CharField(max_length=128, verbose_name='Название продукта')
-    quantity = models.IntegerField(verbose_name='Количество продукта')
+    model = models.CharField(max_length=128, verbose_name='Модель продукта')
+    quantity = models.PositiveIntegerField(verbose_name='Количество продукта',)
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Цена')
     price_rrc = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Рекомендуемая розничная цена')
 
@@ -69,7 +71,7 @@ class ProductInfo(models.Model):
         verbose_name_plural = "Информативный список о продуктах"
 
     def __str__(self):
-        return self.name
+        return self.model
 
 class Parameter(models.Model):
     name = models.CharField(max_length=128, verbose_name='Название параметра')
@@ -98,7 +100,7 @@ class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Пользователь', related_name='users')
     dt = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=128, choices=STATE_CHOICES, verbose_name='Статус заказа', default='basket')
-
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, verbose_name='Контакты', related_name='contact', null=True, blank=True)
     class Meta:
         verbose_name = 'Заказ'
         verbose_name_plural = "Список заказов"
@@ -107,22 +109,11 @@ class Order(models.Model):
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, verbose_name='Заказ', related_name='ordered_items')
     product_info = models.ForeignKey(ProductInfo, on_delete=models.CASCADE, verbose_name='Продукт', related_name='ordered_items')
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, verbose_name='Магазин', related_name='ordered_items')
-    quantity = models.IntegerField(verbose_name='Количество')
+    quantity = models.PositiveIntegerField(verbose_name='Количество')
 
     class Meta:
         verbose_name = 'Заказанная позиция'
         verbose_name_plural = "Список заказанных позиций"
         constraints = [
-            models.UniqueConstraint(fields=['order_id', 'product_info', 'shop_id'], name='unique_order_item'),
+            models.UniqueConstraint(fields=['order_id', 'product_info'], name='unique_order'),
         ]
-
-
-class Contact(models.Model):
-    type = models.CharField(max_length=128, choices=USER_TYPE_CHOICES, verbose_name='Тип пользователя') #OneToOne
-    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Пользователь', related_name='contacts')
-    # value = models.CharField(max_length=128, verbose_name='Значение?') #???????????
-
-    class Meta:
-        verbose_name = 'Контакт пользователя'
-        verbose_name_plural = "Список контактов пользователей"

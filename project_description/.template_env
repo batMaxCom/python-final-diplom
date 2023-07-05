@@ -1,0 +1,26 @@
+POSTGRES_DB=DB_name
+POSTGRES_USER=DB_login
+POSTGRES_PASSWORD=DB_password
+
+SECRET_KEY=django_secret_key (https://djecrety.ir/)
+ALLOWED_HOSTS=*
+DB_ENGINE=django.db.backends.postgresql
+DB_NAME=DB_name
+DB_HOST=127.0.0.1
+DB_PORT=5431
+DB_USER=DB_login
+DB_PASSWORD=DB_password
+DEBUG=True
+
+EMAIL_HOST=email_host
+EMAIL_HOST_USER=you_email
+EMAIL_HOST_PASSWORD=you_email_password
+EMAIL_PORT=email_port
+EMAIL_USE_SSL=True
+
+#EXAMPLE(MAIL.RU):
+    #EMAIL_HOST=smtp.mail.ru
+    #EMAIL_HOST_USER=example@mail.ru
+    #EMAIL_HOST_PASSWORD=mypassword_example (https://help.mail.ru/mail/security/protection/external)
+    #EMAIL_PORT=465
+    #EMAIL_USE_SSL=True
