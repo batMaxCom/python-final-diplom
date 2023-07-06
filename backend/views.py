@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from backend.serializers import CategoriesSerializer, ProductInfoSerializer, ShopSerializer, \
     OrderItemSerializer, OrderSerializer, OrderListSerializer, ProductInfoListSerializer
 from backend.models import Category, Shop, ProductInfo, Product, ProductParameter, Parameter, Order, OrderItem
-from backend.utils import update_state_message
+from backend.utils import update_state_message, send_order_buyer, send_order_partner
 
 import yaml
 import os
@@ -200,49 +200,93 @@ class OrderView(APIView):
         serializer = OrderSerializer(order, many=True)
         return Response(serializer.data)
 
+    # def post(self, request, *args, **kwargs):
+    #     if not request.user.is_authenticated:
+    #         return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
+    #     contact = request.data.get('contact_id')
+    #     try:
+    #         update_object = Order.objects.filter(user=request.user.id, status='basket').prefetch_related('ordered_items__product_info__shop')
+    #     except ValueError:
+    #         return JsonResponse({'Status': False, 'Errors': 'Неверно указаны элементы заказа.'})
+    #     else:
+    #         if update_object.exists():
+    #             if update_object.first().contact or contact:
+    #                 partner_list = [{'email': obj.product_info.shop.user.email,
+    #                                  'data': {'product_info': obj.product_info,
+    #                                           'quantity_basket': obj.quantity,
+    #                                           'quantity_partner': obj.product_info.quantity}}
+    #                                 for obj in update_object.first().ordered_items.all()]
+    #                 # проверка наличия количества единиц товара у поставщика
+    #                 for partner in partner_list:
+    #                     if partner['data']['quantity_basket'] > partner['data']['quantity_partner']:
+    #                         return JsonResponse(
+    #                             {'Status': False, 'quantity_error': f'У поставщика больше нет такого количества товара. Вы можете заказать не более {partner["data"]["quantity_partner"]} единиц.'})
+    #                 try:
+    #                     update_object.update(status='new', contact=contact)
+    #                 except IntegrityError:
+    #                     return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'})
+    #                 else:
+    #                     for partner in partner_list:
+    #                         obj = partner['data']['product_info']
+    #                         obj.quantity -= partner['data']['quantity_basket']
+    #                         obj.save()
+    #                 #TODO: Если у поставщика заказали несколько товаров,
+    #                 # нужно отправить одно письмо на все товары, а не на каждый товар отдельно
+    #                 # send_order_buyer(request.user.email, [data['data'] for data in partner_list])
+    #                 # for partner in partner_list:
+    #                     # send_order_partner(partner['email'], partner['data'])
+    #
+    #                 return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'})
+    #             else:
+    #                 return JsonResponse({'Status': False, 'contact_error': 'Контакты пользователя не указаны.'})
+    #         else:
+    #             return JsonResponse({'Status': False, 'Errors': 'Корзина пуста.'})
+
+
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
         contact = request.data.get('contact_id')
-
         try:
             update_object = Order.objects.filter(user=request.user.id, status='basket').prefetch_related('ordered_items__product_info__shop')
+            order = update_object.first()
         except ValueError:
             return JsonResponse({'Status': False, 'Errors': 'Неверно указаны элементы заказа.'})
         else:
-            if update_object.exists():
-                if update_object.first().contact or contact:
-                    partner_list = [{'email': obj.product_info.shop.user.email,
-                                     'data': {'product_info': obj.product_info,
-                                              'quantity_basket': obj.quantity,
-                                              'quantity_partner': obj.product_info.quantity}}
-                                    for obj in update_object.first().ordered_items.all()]
+            if order:
+                if order.contact or contact:
                     # проверка наличия количества единиц товара у поставщика
-                    for partner in partner_list:
-                        if partner['data']['quantity_basket'] > partner['data']['quantity_partner']:
+                    for obj in order.ordered_items.all():
+                        if obj.quantity > obj.product_info.quantity:
                             return JsonResponse(
-                                {'Status': False, 'quantity_error': f'У поставщика больше нет такого количества товара. Вы можете заказать не более {partner["data"]["quantity_partner"]} единиц.'})
+                                {'Status': False,
+                                 'quantity_error': f'У поставщика больше нет такого количества товара. Вы можете заказать не более {obj.product_info.quantity} единиц.'})
                     try:
                         update_object.update(status='new', contact=contact)
                     except IntegrityError:
                         return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'})
                     else:
-                        for partner in partner_list:
-                            obj = partner['data']['product_info']
-                            obj.quantity -= partner['data']['quantity_basket']
-                            obj.save()
-                    #TODO: Если у поставщика заказали несколько товаров,
-                    # нужно отправить одно письмо на все товары, а не на каждый товар отдельно
-                    # send_order_buyer(request.user.email, [data['data'] for data in partner_list])
-                    # for partner in partner_list:
-                        # send_order_partner(partner['email'], partner['data'])
-
-                    return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'})
+                        product_list = {order.product_info: order.quantity for order in order.ordered_items.all()}
+                        # отправка сообщения клиенту
+                        send_order_buyer(request.user.email, order.id, product_list)
+                        quantity_update(order.ordered_items.all())
+                        # отправка сообщения поставщику
+                        # partner_email = list(dict.fromkeys([items.product_info.shop.user.email for items in order.ordered_items.all()]))
+                        partner_email = list(order.ordered_items.all().values_list("product_info__shop__user__email", flat=True).distinct())
+                        for email in partner_email:
+                            ordered_list = {order.product_info: order.quantity for order in order.ordered_items.filter(product_info__shop__user__email=email)}
+                            send_order_partner(email, order, ordered_list)
+                        return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'})
                 else:
                     return JsonResponse({'Status': False, 'contact_error': 'Контакты пользователя не указаны.'})
             else:
                 return JsonResponse({'Status': False, 'Errors': 'Корзина пуста.'})
 
+def quantity_update(order_item_list):
+    for order_items in order_item_list:
+        product_info = order_items.product_info
+        product_info.quantity -= order_items.quantity
+        product_info.save()
 
 class PartnerState(APIView):
     """
