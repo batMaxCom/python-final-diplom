@@ -2,6 +2,7 @@
 
 [Главная страница](../README.md)
 
+[Содержание](../project_description/info.md)
 
 ## Описание
 

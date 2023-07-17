@@ -7,17 +7,22 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
+
 
 from backend.serializers import CategoriesSerializer, ProductInfoSerializer, ShopSerializer, \
-    OrderItemSerializer, OrderSerializer, OrderListSerializer, ProductInfoListSerializer
+    OrderItemSerializer, OrderSerializer, OrderListSerializer, ProductInfoListSerializer, StatusSerializer
 from backend.models import Category, Shop, ProductInfo, Product, ProductParameter, Parameter, Order, OrderItem
 from backend.utils import update_state_message, send_order_buyer, send_order_partner
 
 import yaml
 import os
 
+from users.permissions import IsShop
+from users.views import serializer_error
 
 
 class CategoryView(ListAPIView):
@@ -26,6 +31,7 @@ class CategoryView(ListAPIView):
     """
     queryset = Category.objects.all()
     serializer_class = CategoriesSerializer
+    permission_classes = [AllowAny]
 
 
 class ShopView(ListAPIView):
@@ -34,20 +40,18 @@ class ShopView(ListAPIView):
     """
     queryset = Shop.objects.all()
     serializer_class = ShopSerializer
+    permission_classes = [AllowAny]
 
 
 class ProductView(ListAPIView):
     """
     Класс для просмотра продуктов, с возможность сортировки по магазину или категории
-    TODO: Нужна ли при просмотре каталога сокращеная форма отображения? А при просмотре позиций полная?
     """
     serializer_class = ProductInfoListSerializer
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
-        queryset = ProductInfo.objects.all()
         query = Q()
-        #TODO: Уменстно ли использование product_id как части пути или сделать аналогично shop_id и category_id?
-        # product_id = self.request.query_params.get('product_id')
         product_id = self.kwargs.get('product_id')
         shop_id = self.request.query_params.get('shop_id')
         category_id = self.request.query_params.get('category_id')
@@ -58,7 +62,7 @@ class ProductView(ListAPIView):
             query = query & Q(shop_id=shop_id)
         if category_id:
             query = query & Q(product__category_id=category_id)
-        queryset = queryset.filter(query).prefetch_related("product__category")
+        queryset = ProductInfo.objects.filter(query).prefetch_related("product__category")
         return queryset
 
 
@@ -68,26 +72,20 @@ class BasketView(APIView):
     """
 
     def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'},
-                                status=status.HTTP_403_FORBIDDEN)
         basket = Order.objects.filter(
             user_id=request.user.id, status='basket').prefetch_related(
             'ordered_items__product_info__product__category',
             'ordered_items__product_info__product_parameters__parameter').annotate(
             total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
-        # TODO:Изменить вид в котором выводится корзина, много лишней информации.
         serializer = OrderSerializer(basket, many=True)
         return Response(serializer.data)
 
     def post(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
         items = request.data.get('items')
         if type(items) != list:
-            return JsonResponse({'Status': False, 'Errors': 'Неверный формат запроса. Ожидается список товаров.'})
+            return JsonResponse({'Status': False, 'value_error': 'Неверный формат запроса. Ожидается список товаров.'}, status=status.HTTP_400_BAD_REQUEST)
         if not items:
-            return JsonResponse({'Status': False, 'Errors': 'Список товаров пуст. Пожалуйста выберите товары из каталога'})
+            return JsonResponse({'Status': False, 'value_error': 'Список товаров пуст. Пожалуйста выберите товары из каталога'}, status=status.HTTP_400_BAD_REQUEST)
         order, _ = Order.objects.get_or_create(user_id=request.user.id, status='basket')
         objects_created = []
         error_created = []
@@ -101,7 +99,7 @@ class BasketView(APIView):
                     order_item.update({'error': 'Товар уже добавлен в корзину.'})
                     error_created.append(order_item)
                 except ValueError as error:
-                    return JsonResponse({'Status': False, 'valuer_error': error})
+                    return JsonResponse({'Status': False, 'valuer_error': error}, status=status.HTTP_400_BAD_REQUEST)
                 else:
                     objects_created.append(serializer.data)
             else:
@@ -115,12 +113,10 @@ class BasketView(APIView):
         return JsonResponse(response)
 
     def put(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
         items = request.data.get('items')
         if items:
             if type(items) != list:
-                return JsonResponse({'Status': False, 'Errors': 'Неверный формат запроса. Ожидается список товаров.'})
+                return JsonResponse({'Status': False, 'value_error': 'Неверный формат запроса. Ожидается список товаров.'}, status=status.HTTP_400_BAD_REQUEST)
             basket, _ = Order.objects.get_or_create(user_id=request.user.id, status='basket')
             serializer_list = []
             error_updated = []
@@ -138,27 +134,24 @@ class BasketView(APIView):
                     order_item.update({'error': serializer.errors})
                     error_updated.append(order_item)
             if bool(error_updated):
-                return JsonResponse({'Ошибка в обновлении': error_updated})
+                return JsonResponse({'Status': False, 'update_error': error_updated}, status=status.HTTP_400_BAD_REQUEST)
             elif len(items) == len(serializer_list):
                 objects_updated = []
                 for obj in serializer_list:
                     obj.is_valid()
                     obj.save()
                     objects_updated.append(obj.data)
-                return JsonResponse({'Status': True, 'Обновленные объекты': objects_updated})
-        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+                return JsonResponse({'Status': True, 'Обновленные объекты': objects_updated}, status=status.HTTP_200_OK)
+        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
         items = request.data.get('items')
         if items:
             if type(items) != list:
-                return JsonResponse({'Status': False, 'Errors': 'Неверный формат запроса. Ожидается список товаров.'})
+                return JsonResponse({'Status': False, 'Errors': 'Неверный формат запроса. Ожидается список товаров.'}, status=status.HTTP_400_BAD_REQUEST)
             basket, _ = Order.objects.get_or_create(user_id=request.user.id, status='basket')
             objects_list = []
             error_deleted = []
-            # TODO: Возможно в product_info следует передавать список id объектов
             for order_item in items:
                 if type(order_item['product_info']) == int:
                     object = OrderItem.objects.filter(
@@ -172,15 +165,15 @@ class BasketView(APIView):
                 elif order_item['product_info'] == 'all':
                     OrderItem.objects.filter(
                         order_id=basket.id).delete()
-                    return JsonResponse({'Status': True, 'Response': "Корзина очищена"})
+                    return JsonResponse({'Status': True, 'Response': "Корзина очищена"}, status=status.HTTP_200_OK)
                 else:
                     error_deleted.append(order_item)
             if bool(error_deleted):
-                return JsonResponse({'Таких товаров нет в корзине': error_deleted})
+                return JsonResponse({'Status': False, 'Таких товаров нет в корзине': error_deleted}, status=status.HTTP_400_BAD_REQUEST)
             elif len(items) == len(objects_list):
                 object_deleted = [obj.delete() for obj in objects_list]
-                return JsonResponse({'Status': True, 'Responce': 'Все записи были удалены'})
-        return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+                return JsonResponse({'Status': True, 'Response': 'Все записи были удалены'}, status=status.HTTP_200_OK)
+        return JsonResponse({'Status': False, 'value_error': 'Не указаны все необходимые аргументы'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class OrderView(APIView):
@@ -189,8 +182,6 @@ class OrderView(APIView):
     """
 
     def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
         order = Order.objects.filter(
             user_id=request.user.id).exclude(status='basket').prefetch_related(
             'ordered_items__product_info__product__category',
@@ -200,154 +191,127 @@ class OrderView(APIView):
         serializer = OrderSerializer(order, many=True)
         return Response(serializer.data)
 
-    # def post(self, request, *args, **kwargs):
-    #     if not request.user.is_authenticated:
-    #         return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
-    #     contact = request.data.get('contact_id')
-    #     try:
-    #         update_object = Order.objects.filter(user=request.user.id, status='basket').prefetch_related('ordered_items__product_info__shop')
-    #     except ValueError:
-    #         return JsonResponse({'Status': False, 'Errors': 'Неверно указаны элементы заказа.'})
-    #     else:
-    #         if update_object.exists():
-    #             if update_object.first().contact or contact:
-    #                 partner_list = [{'email': obj.product_info.shop.user.email,
-    #                                  'data': {'product_info': obj.product_info,
-    #                                           'quantity_basket': obj.quantity,
-    #                                           'quantity_partner': obj.product_info.quantity}}
-    #                                 for obj in update_object.first().ordered_items.all()]
-    #                 # проверка наличия количества единиц товара у поставщика
-    #                 for partner in partner_list:
-    #                     if partner['data']['quantity_basket'] > partner['data']['quantity_partner']:
-    #                         return JsonResponse(
-    #                             {'Status': False, 'quantity_error': f'У поставщика больше нет такого количества товара. Вы можете заказать не более {partner["data"]["quantity_partner"]} единиц.'})
-    #                 try:
-    #                     update_object.update(status='new', contact=contact)
-    #                 except IntegrityError:
-    #                     return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'})
-    #                 else:
-    #                     for partner in partner_list:
-    #                         obj = partner['data']['product_info']
-    #                         obj.quantity -= partner['data']['quantity_basket']
-    #                         obj.save()
-    #                 #TODO: Если у поставщика заказали несколько товаров,
-    #                 # нужно отправить одно письмо на все товары, а не на каждый товар отдельно
-    #                 # send_order_buyer(request.user.email, [data['data'] for data in partner_list])
-    #                 # for partner in partner_list:
-    #                     # send_order_partner(partner['email'], partner['data'])
-    #
-    #                 return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'})
-    #             else:
-    #                 return JsonResponse({'Status': False, 'contact_error': 'Контакты пользователя не указаны.'})
-    #         else:
-    #             return JsonResponse({'Status': False, 'Errors': 'Корзина пуста.'})
-
-
     def post(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
         contact = request.data.get('contact_id')
         try:
             update_object = Order.objects.filter(user=request.user.id, status='basket').prefetch_related('ordered_items__product_info__shop')
             order = update_object.first()
         except ValueError:
-            return JsonResponse({'Status': False, 'Errors': 'Неверно указаны элементы заказа.'})
+            return JsonResponse({'Status': False, 'value_error': 'Неверно указаны элементы заказа.'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             if order:
                 if order.contact or contact:
-                    # проверка наличия количества единиц товара у поставщика
                     for obj in order.ordered_items.all():
                         if obj.quantity > obj.product_info.quantity:
                             return JsonResponse(
                                 {'Status': False,
-                                 'quantity_error': f'У поставщика больше нет такого количества товара. Вы можете заказать не более {obj.product_info.quantity} единиц.'})
+                                 'quantity_error': f'У поставщика больше нет такого количества товара. Вы можете заказать не более {obj.product_info.quantity} единиц.'}, status=status.HTTP_400_BAD_REQUEST)
                     try:
-                        update_object.update(status='new', contact=contact)
+                        update_object.update(status='placed', contact=contact)
                     except IntegrityError:
-                        return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'})
+                        return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'}, status=status.HTTP_400_BAD_REQUEST)
                     else:
                         product_list = {order.product_info: order.quantity for order in order.ordered_items.all()}
-                        # отправка сообщения клиенту
                         send_order_buyer(request.user.email, order.id, product_list)
-                        quantity_update(order.ordered_items.all())
-                        # отправка сообщения поставщику
-                        # partner_email = list(dict.fromkeys([items.product_info.shop.user.email for items in order.ordered_items.all()]))
+                        order.quantity_and_status_update()
                         partner_email = list(order.ordered_items.all().values_list("product_info__shop__user__email", flat=True).distinct())
                         for email in partner_email:
                             ordered_list = {order.product_info: order.quantity for order in order.ordered_items.filter(product_info__shop__user__email=email)}
                             send_order_partner(email, order, ordered_list)
-                        return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'})
+                        return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'}, status=status.HTTP_200_OK)
                 else:
-                    return JsonResponse({'Status': False, 'contact_error': 'Контакты пользователя не указаны.'})
+                    return JsonResponse({'Status': False, 'contact_error': 'Контакты пользователя не указаны.'}, status=status.HTTP_400_BAD_REQUEST)
             else:
-                return JsonResponse({'Status': False, 'Errors': 'Корзина пуста.'})
+                return JsonResponse({'Status': False, 'Errors': 'Корзина пуста.'}, status=status.HTTP_400_BAD_REQUEST)
 
-def quantity_update(order_item_list):
-    for order_items in order_item_list:
-        product_info = order_items.product_info
-        product_info.quantity -= order_items.quantity
-        product_info.save()
 
 class PartnerState(APIView):
     """
     Класс для изменения статуса заказа поставщиком
     """
-    # TODO: Если в заказе разные поставщики, то как может один поставщик менять статус заказа?
-    #  Только владелец товара может менять статус!
+    permission_classes = [*api_settings.DEFAULT_PERMISSION_CLASSES, IsShop]
+
+    # def post(self, request, *args, **kwargs):
+    #     order_id = kwargs.get('order_id')
+    #     if order_id:
+    #         try:
+    #             status = request.data['status'] if request.data['status'] != "basket" else None
+    #         except KeyError as error:
+    #             return JsonResponse(
+    #                 {'Status': False, 'Error': f'Ошибка в формате запроста. Проверьте верность поля {error}'})
+    #         else:
+    #             order = Order.objects.filter(
+    #                 ordered_items__product_info__shop__user_id=request.user.id,
+    #                 id=order_id).exclude(status='basket').prefetch_related(
+    #                 'ordered_items__product_info__shop__user').distinct()
+    #             serializer = OrderListSerializer(data={"id": order_id, "status": status}, instance=order.first())
+    #             if order.exists():
+    #                 if serializer.is_valid():
+    #                     serializer.save()
+    #                     update_state_message(order.first())
+    #                     return JsonResponse({'Status': True,
+    #                                          'Response': f"Заказ под номером {serializer.data['id']} переведен в статус {serializer.data['status']}."}, status=200)
+    #                 else:
+    #                     return serializer_error(serializer)
+    #             else:
+    #                 return JsonResponse({'Status': False, 'Error': f"Заказ под номером {order_id} отсутствует."}, status=400)
+    #     else:
+    #         return JsonResponse({'Status': False, 'Error': "Не указаны все необходимы аргументы."}, status=400)
+
+
     def post(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
-        if request.user.type != 'shop':
-            return JsonResponse({'Status': False, 'Error': 'Заказы может просматривать только поставщик'}, status=403)
-        order_id = kwargs.get('order_id')
-        if order_id:
+        order_items_id = kwargs.get('order_items_id')
+        if order_items_id:
             try:
-                status = request.data['status'] if request.data['status'] != "basket" else None
+                status = request.data['status']
             except KeyError as error:
                 return JsonResponse(
-                    {'Status': False, 'Error': f'Ошибка в формате запроста. Проверьте верность поля {error}'})
+                    {'Status': False, 'Error': f'Ошибка в формате запроста. Проверьте верность поля {error}'}, status=400)
             else:
-                order = Order.objects.filter(
-                    ordered_items__product_info__shop__user_id=request.user.id,
-                    id=order_id).exclude(status='basket').prefetch_related(
-                    'ordered_items__product_info__shop__user').distinct()
-                serializer = OrderListSerializer(data={"id": order_id, "status": status}, instance=order.first())
-                if order.exists():
-                    serializer.is_valid(raise_exception=True)
-                    serializer.save()
-                    update_state_message(order.first())
-                    return JsonResponse({'Status': True,
-                                         'Response': f"Заказ под номером {serializer.data['id']} переведен в статус {serializer.data['status']}."})
+                order_items = OrderItem.objects.filter(
+                    product_info__shop__user_id=request.user.id,
+                    id=order_items_id).exclude(status='basket').prefetch_related(
+                    'product_info__shop__user').distinct().first()
+                serializer = StatusSerializer(data={"id": order_items_id, "status": status}, instance=order_items)
+                if order_items:
+                    if serializer.is_valid():
+                        serializer.save()
+                        update_state_message(order_items)
+                        order = order_items.order
+                        order.status_check()
+                        return JsonResponse({'Status': True,
+                                             'Response': f"Часть заказа №{order_items.order.id} под номером {order_items.id} переведен в статус {order_items.get_status_display()}."}, status=200)
+                    else:
+                        return serializer_error(serializer)
                 else:
-                    return JsonResponse({'Status': False, 'Error': f"Заказ под номером {order_id} отсутствует."})
+                    return JsonResponse({'Status': False, 'Error': f"Заказ под номером {order_items_id} отсутствует."}, status=400)
         else:
-            return JsonResponse({'Status': False, 'Error': "Не указаны все необходимы аргументы."})
-
+            return JsonResponse({'Status': False, 'Error': "Не указаны все необходимы аргументы."}, status=400)
 
 class PartnerOrders(APIView):
     """
     Класс для просмотра заказов, в которых присутствуют товары поставщика
     """
+    permission_classes = [*api_settings.DEFAULT_PERMISSION_CLASSES, IsShop]
 
     def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Требуется войти в аккаунт'}, status=403)
-        if request.user.type != 'shop':
-            return JsonResponse({'Status': False, 'Error': 'Заказы может просматривать только поставщик'}, status=403)
         order_id = kwargs.get('order_id')
         if order_id:
-            order = Order.objects.filter(
-                ordered_items__product_info__shop__user_id=request.user.id, id=order_id).exclude(
-                status='basket').prefetch_related(
-                'ordered_items__product_info__shop__user',
-                'ordered_items__product_info__product__category',
-                'ordered_items__product_info__product_parameters__parameter').annotate(
-                total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
-            if order.exists():
-                serializer = OrderSerializer(order.first())
+            order_items = OrderItem.objects.filter(
+                product_info__shop__user_id=request.user.id,
+                order_id=order_id).exclude(
+                order__status='basket').prefetch_related(
+                'product_info__shop__user',
+                'product_info__product__category',
+                'product_info__product_parameters__parameter',
+                'order').annotate(
+                total_sum=Sum(F('quantity') * F('product_info__price')))
+            if order_items.exists():
+                serializer = OrderItemSerializer(order_items, many=True)
                 return Response(serializer.data)
             else:
                 return JsonResponse({'Status': False, 'Errors': 'Заказ не найден. Проверьте номер заказа.'})
+
         else:
             order = Order.objects.filter(
                 ordered_items__product_info__shop__user_id=request.user.id).exclude(status='basket').prefetch_related(
@@ -361,19 +325,13 @@ class PartnerUpdate(APIView):
     """
     Класс загрузки файла с товарами и прайсом
     """
+    permission_classes = [*api_settings.DEFAULT_PERMISSION_CLASSES, IsShop]
 
     def post(self, request):
         user = request.user
-        # Проверка, что пользователь зарегистрирован
-        if not user.is_authenticated:
-            return JsonResponse({'Status': False, 'auth_error': 'Требуется войти в аккаунт'}, status=403)
-        # Проверка, что пользователь - поставщик
-        if user.type != 'shop':
-            return JsonResponse({'Status': False, 'usertype_error': 'Размещать заказы могут только поставщики'}, status=403)
         url = request.data.get('url')
         filename = request.data.get('filename')
         # Проверка валидности сайта магазина
-        #TODO: Нужен ли url как обязательный элемент?
         if url:
             validate_url = URLValidator()
             try:
@@ -385,7 +343,7 @@ class PartnerUpdate(APIView):
             try:
                 os.stat(filename)
             except FileNotFoundError:
-                return JsonResponse({'Status': False, 'url_error': 'Файл не найден'})
+                return JsonResponse({'Status': False, 'url_error': 'Файл не найден'}, status=400)
             # Чтение файла
             with open(request.data['filename'], encoding="utf-8") as fh:
                 read_data = yaml.load(fh, Loader=yaml.SafeLoader)
@@ -394,7 +352,7 @@ class PartnerUpdate(APIView):
                     shop, _ = Shop.objects.get_or_create(name=read_data['shop'], user_id=user.id)
                 except IntegrityError:
                     return JsonResponse(
-                        {'Status': False, 'file_error': 'Не указано название магазина или указано неверно'})
+                        {'Status': False, 'file_error': 'Не указано название магазина или указано неверно'}, status=400)
                 shop.filename, shop.url, shop.last_update = request.data['filename'], url, timezone.now()
                 shop.save()
                 # Создаем или извлекаем категории
@@ -405,11 +363,11 @@ class PartnerUpdate(APIView):
                     except IntegrityError:
                         return JsonResponse(
                             {'Status': False,
-                             'file_error': 'Проверьте верность введенных данных в пункте Категория'})
+                             'file_error': 'Проверьте верность введенных данных в пункте Категория'}, status=400)
                     except KeyError as error:
                         return JsonResponse(
                             {'Status': False,
-                             'file_error': f'В одном или нескольких значениях списка Категорий отсутствует поле {error}'})
+                             'file_error': f'В одном или нескольких значениях списка Категорий отсутствует поле {error}'}, status=400)
                     category_object.shops.add(shop.id)
                     category_object.save()
                 # Удаляем прошлые продукты
@@ -432,15 +390,15 @@ class PartnerUpdate(APIView):
                     except IntegrityError:
                         return JsonResponse(
                             {'Status': False,
-                             'file_error': 'Проверьте верность введенных данных в пункте Товары'})
+                             'file_error': 'Проверьте верность введенных данных в пункте Товары'}, status=400)
                     except KeyError as error:
                         return JsonResponse(
                             {'Status': False,
-                             'file_error': f'В одном или нескольких значениях списка Товаров отсутствует поле {error}'})
+                             'file_error': f'В одном или нескольких значениях списка Товаров отсутствует поле {error}'}, status=400)
                     for name, value in item['parameters'].items():
                         parameter_object, _ = Parameter.objects.get_or_create(name=name)
                         ProductParameter.objects.create(product_info_id=product_info.id,
                                                         parameter_id=parameter_object.id,
                                                         value=str(value))
-                return JsonResponse({'Status': True, 'Response': 'Прайс успешно обновлен'})
-        return JsonResponse({'Status': False, 'field_error': 'Не указаны все необходимые аргументы'})
+                return JsonResponse({'Status': True, 'Response': 'Прайс успешно обновлен'}, status=200)
+        return JsonResponse({'Status': False, 'field_error': 'Не указаны все необходимые аргументы'}, status=400)

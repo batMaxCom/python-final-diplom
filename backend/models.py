@@ -1,14 +1,32 @@
 from django.db import models
 from users.models import User, Contact
-STATE_CHOICES = (
+
+# STATE_CHOICES = (
+#     ('basket', 'Статус корзины'),
+#     ('new', 'Новый'),
+#     ('confirmed', 'Подтвержден'),
+#     ('assembled', 'Собран'),
+#     ('sent', 'Отправлен'),
+#     ('delivered', 'Доставлен'),
+#     ('canceled', 'Отменен'),
+# )
+
+STATE_ORDER_CHOICES = (
     ('basket', 'Статус корзины'),
-    ('new', 'Новый'),
-    ('confirmed', 'Подтвержден'),
-    ('assembled', 'Собран'),
-    ('sent', 'Отправлен'),
-    ('delivered', 'Доставлен'),
-    ('canceled', 'Отменен'),
+    ('placed', 'Оформлен'),
+    ('close', 'Закрыт'),
 )
+
+STATE_ORDERITEM_CHOICES = (
+    ('new', 'Ожидает подтверждения'),
+    ('confirmed', 'Подтвержден поставщиком'),
+    ('assembled', 'Собран'),
+    ('transferred', 'Передан в доставку'),
+    ('send', 'В пути'),
+    ('delivered', 'Доставлен'),
+)
+
+
 
 USER_TYPE_CHOICES = (
     ('shop', 'Магазин'),
@@ -99,18 +117,30 @@ class ProductParameter(models.Model):
 class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Пользователь', related_name='users')
     dt = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=128, choices=STATE_CHOICES, verbose_name='Статус заказа', default='basket')
+    status = models.CharField(max_length=128, choices=STATE_ORDER_CHOICES, verbose_name='Статус заказа', default='basket')
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, verbose_name='Контакты', related_name='contact', null=True, blank=True)
     class Meta:
         verbose_name = 'Заказ'
         verbose_name_plural = "Список заказов"
 
+    def quantity_and_status_update(self):
+        for order_items in self.ordered_items.all():
+            product_info = order_items.product_info
+            product_info.quantity -= order_items.quantity
+            product_info.save()
+            order_items.status = 'new'
+            order_items.save()
+    def status_check(self):
+        status = [order_items.status for order_items in self.ordered_items.all()]
+        if status.count('delivered') == len(status):
+            self.status = 'close'
+            self.save()
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, verbose_name='Заказ', related_name='ordered_items')
     product_info = models.ForeignKey(ProductInfo, on_delete=models.CASCADE, verbose_name='Продукт', related_name='ordered_items')
     quantity = models.PositiveIntegerField(verbose_name='Количество')
-
+    status = models.CharField(max_length=128, choices=STATE_ORDERITEM_CHOICES, verbose_name='Статус отправления товара', blank=True)
     class Meta:
         verbose_name = 'Заказанная позиция'
         verbose_name_plural = "Список заказанных позиций"

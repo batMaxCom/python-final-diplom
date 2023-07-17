@@ -53,12 +53,15 @@ class ProductInfoListSerializer(serializers.ModelSerializer):
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
+    order_items_id = serializers.IntegerField(source='id')
     quantity = serializers.IntegerField(min_value=1)
+    product_info = ProductInfoSerializer()
+    total_sum = serializers.IntegerField()
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'order', 'product_info', 'quantity']
-        read_only_fields = ('id',)
+        fields = ['order_items_id', 'order', 'status', 'product_info', 'quantity', 'total_sum']
+        read_only_fields = ('order_items_id', 'order')
 
     def update(self, instance, validated_data):
         instance.quantity = validated_data.get("quantity", instance.quantity)
@@ -102,3 +105,14 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ('id', 'status', 'dt', 'ordered_items',  'total_sum', 'contact')
         read_only_fields = ('id',)
 
+
+class StatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ['status']
+        read_only_fields = ('id', 'order', 'product_info', 'quantity')
+
+    def update(self, instance, validated_data):
+        instance.status = validated_data.get("status", instance.quantity)
+        instance.save()
+        return instance

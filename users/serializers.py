@@ -143,11 +143,10 @@ class ContactSerializer(serializers.ModelSerializer):
             **error_messages
         }
     )
-    email = serializers.EmailField(source='user.email')
 
     class Meta:
         model = Contact
-        fields = ('id', 'user', 'email', 'first_name', 'last_name', 'surname', 'type', 'city', 'street', 'house', 'structure', 'building', 'apartment', 'phone')
+        fields = ('id', 'user', 'first_name', 'last_name', 'surname', 'type', 'city', 'street', 'house', 'structure', 'building', 'apartment', 'phone')
         read_only_fields = ('id', 'type')
 
 

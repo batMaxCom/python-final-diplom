@@ -5,6 +5,8 @@ class IsActivated(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_verified)
 
-class IsOwnerEmail(BasePermission):
+
+class IsShop(BasePermission):
+    message = 'Вы должы быть Поставщиком!'
     def has_permission(self, request, view):
-        return bool(request.user and request.data['email'] == request.user.email)
+        return bool(request.user.type == 'shop')

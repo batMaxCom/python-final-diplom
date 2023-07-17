@@ -17,7 +17,7 @@ def update_state_message(order):
         # from:
         settings.EMAIL_HOST_USER,
         # to:
-        [order.user.email]
+        [order.order.user.email]
     )
     msg.send()
 

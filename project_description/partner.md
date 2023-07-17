@@ -2,6 +2,7 @@
 
 [Главная страница](../README.md)
 
+[Содержание](../project_description/info.md)
 
 ## Описание
 
@@ -50,7 +51,7 @@ Authorization: Token "my_token"
 
 POST-запрос:
 ```
-POST {{baseUrl}}/api/v1/partner/status/<order_id>
+POST {{baseUrl}}/api/v1/partner/status/<order_items_id>
 Content-Type: application/json
 Authorization: Token "my_token"
 
