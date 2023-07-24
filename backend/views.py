@@ -16,7 +16,7 @@ from rest_framework.settings import api_settings
 from backend.serializers import CategoriesSerializer, ProductInfoSerializer, ShopSerializer, \
     OrderItemSerializer, OrderSerializer, OrderListSerializer, ProductInfoListSerializer, StatusSerializer
 from backend.models import Category, Shop, ProductInfo, Product, ProductParameter, Parameter, Order, OrderItem
-from backend.utils import update_state_message, send_order_buyer, send_order_partner
+from backend.tasks import update_state_message_task, send_order_buyer_task, send_order_partner_task
 
 import yaml
 import os
@@ -211,13 +211,11 @@ class OrderView(APIView):
                     except IntegrityError:
                         return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'}, status=status.HTTP_400_BAD_REQUEST)
                     else:
-                        product_list = {order.product_info: order.quantity for order in order.ordered_items.all()}
-                        send_order_buyer(request.user.email, order.id, product_list)
+                        send_order_buyer_task.delay(request.user.email, order.id)
                         order.quantity_and_status_update()
                         partner_email = list(order.ordered_items.all().values_list("product_info__shop__user__email", flat=True).distinct())
                         for email in partner_email:
-                            ordered_list = {order.product_info: order.quantity for order in order.ordered_items.filter(product_info__shop__user__email=email)}
-                            send_order_partner(email, order, ordered_list)
+                            send_order_partner_task.delay(email, order.id)
                         return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'}, status=status.HTTP_200_OK)
                 else:
                     return JsonResponse({'Status': False, 'contact_error': 'Контакты пользователя не указаны.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -230,34 +228,6 @@ class PartnerState(APIView):
     Класс для изменения статуса заказа поставщиком
     """
     permission_classes = [*api_settings.DEFAULT_PERMISSION_CLASSES, IsShop]
-
-    # def post(self, request, *args, **kwargs):
-    #     order_id = kwargs.get('order_id')
-    #     if order_id:
-    #         try:
-    #             status = request.data['status'] if request.data['status'] != "basket" else None
-    #         except KeyError as error:
-    #             return JsonResponse(
-    #                 {'Status': False, 'Error': f'Ошибка в формате запроста. Проверьте верность поля {error}'})
-    #         else:
-    #             order = Order.objects.filter(
-    #                 ordered_items__product_info__shop__user_id=request.user.id,
-    #                 id=order_id).exclude(status='basket').prefetch_related(
-    #                 'ordered_items__product_info__shop__user').distinct()
-    #             serializer = OrderListSerializer(data={"id": order_id, "status": status}, instance=order.first())
-    #             if order.exists():
-    #                 if serializer.is_valid():
-    #                     serializer.save()
-    #                     update_state_message(order.first())
-    #                     return JsonResponse({'Status': True,
-    #                                          'Response': f"Заказ под номером {serializer.data['id']} переведен в статус {serializer.data['status']}."}, status=200)
-    #                 else:
-    #                     return serializer_error(serializer)
-    #             else:
-    #                 return JsonResponse({'Status': False, 'Error': f"Заказ под номером {order_id} отсутствует."}, status=400)
-    #     else:
-    #         return JsonResponse({'Status': False, 'Error': "Не указаны все необходимы аргументы."}, status=400)
-
 
     def post(self, request, *args, **kwargs):
         order_items_id = kwargs.get('order_items_id')
@@ -276,7 +246,7 @@ class PartnerState(APIView):
                 if order_items:
                     if serializer.is_valid():
                         serializer.save()
-                        update_state_message(order_items)
+                        update_state_message_task.delay(order_items)
                         order = order_items.order
                         order.status_check()
                         return JsonResponse({'Status': True,

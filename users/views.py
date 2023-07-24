@@ -15,7 +15,9 @@ from users.models import User, Contact
 from users.serializers import LoginSerializer, UserSerializer, ChangePasswordSerializer, \
     ResetPasswordSerializer, AccountDetailSerializer, ContactSerializer, EmailVerifySerializer, ChangeEmailSerializer, \
     ChangeEmailConfirmSerializer
-from users.utils import generate_code, reset_password, reset_email_code
+from users.utils import generate_code
+from users.tasks import reset_password_task, reset_email_code_task
+
 
 def serializer_error(serializer):
     return JsonResponse({'Status': False, 'valid_error': serializer.errors},
@@ -154,7 +156,7 @@ class ResetPasswordView(CreateAPIView):
     """
     throttle_scope = [AnonRateThrottle]
     serializer_class = ResetPasswordSerializer
-
+    permission_classes = [AllowAny]
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -172,7 +174,7 @@ class ResetPasswordView(CreateAPIView):
             user.set_password(password)
             user.changed_password_date = timezone.now()
             user.save()
-            reset_password(user.email, password)
+            reset_password_task.delay(user.email, password)
             return JsonResponse({'Status': True, 'Response': 'Новый пароль отправлен на вашу почту.'}, status=status.HTTP_200_OK)
         else:
             return serializer_error(serializer)
@@ -199,7 +201,7 @@ class ChangeEmailView(CreateAPIView):
             else:
                 code = generate_code()
                 try:
-                    reset_email_code(user.email, code)
+                    reset_email_code_task.delay(user.email, code)
                 except (SMTPDataError, SMTPRecipientsRefused):
                     return JsonResponse(
                         {'Status': False, 'email_error': "Проверьте верность введеногого адреса электронной почты."}, status=status.HTTP_400_BAD_REQUEST)
@@ -261,21 +263,21 @@ class ContactView(APIView):
             serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data)
 
-    def post(self, request,  *args, **kwargs):
-        request.data._mutable = True
-        request.data.update({'user': request.user.id})
-        phone = request.data.get('phone')
-        if phone:
-            try:
-                int(request.data['phone'])
-            except ValueError:
-                return JsonResponse({'Status': False, 'phone_error': 'Пожалуйста проверте номер телефона. Он не должен содержать пробелов, букв или символов'}, status=status.HTTP_400_BAD_REQUEST)
-        serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        else:
-            return serializer_error(serializer)
+    # def post(self, request,  *args, **kwargs):
+    #     request.data._mutable = True
+    #     request.data.update({'user': request.user.id})
+    #     phone = request.data.get('phone')
+    #     if phone:
+    #         try:
+    #             int(request.data['phone'])
+    #         except ValueError:
+    #             return JsonResponse({'Status': False, 'phone_error': 'Пожалуйста проверте номер телефона. Он не должен содержать пробелов, букв или символов'}, status=status.HTTP_400_BAD_REQUEST)
+    #     serializer = self.serializer_class(data=request.data)
+    #     if serializer.is_valid():
+    #         serializer.save()
+    #         return Response(serializer.data)
+    #     else:
+    #         return serializer_error(serializer)
 
     def patch(self, request,  *args, **kwargs):
         request.data._mutable = True
@@ -303,3 +305,20 @@ class ContactView(APIView):
         else:
             return JsonResponse({'Status': False, 'contact_error': 'Контакт не найден.'},
                                 status=status.HTTP_404_NOT_FOUND)
+
+
+    def post(self, request,  *args, **kwargs):
+        request.data._mutable = True
+        request.data.update({'user': request.user.id})
+        phone = request.data.get('phone')
+        if phone:
+            try:
+                int(request.data['phone'])
+            except ValueError:
+                return JsonResponse({'Status': False, 'phone_error': 'Пожалуйста проверте номер телефона. Он не должен содержать пробелов, букв или символов'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        else:
+            return serializer_error(serializer)

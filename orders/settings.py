@@ -44,7 +44,10 @@ INSTALLED_APPS = [
     'users',
     'backend',
     'rest_framework',
-    'rest_framework.authtoken'
+    'rest_framework.authtoken',
+    # для управления рендерингом ввода формы,
+    # чтобы позволить пользователям загружать файлы.
+    'widget_tweaks'
 
 ]
 
@@ -153,9 +156,18 @@ REST_FRAMEWORK = {
     ]
 }
 
+# email
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 EMAIL_PORT = os.getenv('EMAIL_PORT')
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL')
 SERVER_EMAIL = EMAIL_HOST_USER
+
+# celery
+CELERY_IMPORTS = ('users.tasks', 'backend.tasks')
+CELERY_BROKER_URL = "redis://localhost:6379"
+CELERY_RESULT_BACKEND = "redis://localhost:6379"
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TASK_SERIALIZER = 'json'

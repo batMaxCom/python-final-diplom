@@ -107,8 +107,12 @@ class Contact(models.Model):
     first_name = models.CharField(max_length=50, verbose_name='Имя')
     last_name = models.CharField(max_length=50, verbose_name='Фамилия')
     surname = models.CharField(max_length=50, verbose_name='Отчество', blank=True)
+
+    region = models.CharField(max_length=50, verbose_name='Регион')
+    area = models.CharField(max_length=100, verbose_name='Район', blank=True)
     city = models.CharField(max_length=50, verbose_name='Город')
     street = models.CharField(max_length=100, verbose_name='Улица')
+
     house = models.CharField(max_length=15, verbose_name='Дом')
     structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True)
     building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
