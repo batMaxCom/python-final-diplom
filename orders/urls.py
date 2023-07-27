@@ -15,6 +15,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from drf_spectacular.views import SpectacularRedocView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView
+
+
 
 """
 /api/v1/partner/update
@@ -24,8 +28,17 @@ GET /api/v1/partner/order/124/?token=b39d0f93f9e895b82f1724832b7c186a,
 """
 
 urlpatterns = [
+    # admin and reontend
     path('admin/', admin.site.urls),
+    path('', include('frontend.urls', namespace='frontend')),
+    path('social/', include('social_django.urls', namespace='social')),
+    # API
     path('api/v1/', include('backend.urls', namespace='backend')),
     path('api/v1/', include('users.urls', namespace='users')),
-    path('', include('frontend.urls', namespace='frontend')),
+    # Documentation
+    path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),
+    # Swagger UI:
+    path('api/v1/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    # Redoc UI:
+    path('api/v1/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]

@@ -2,6 +2,7 @@ from django.core.validators import URLValidator
 from django.db import IntegrityError
 from django.db.models import Q, Sum, F
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 
 from rest_framework import status
@@ -70,7 +71,6 @@ class BasketView(APIView):
     """
     Класс для работы с корзиной покупателя
     """
-
     def get(self, request, *args, **kwargs):
         basket = Order.objects.filter(
             user_id=request.user.id, status='basket').prefetch_related(
@@ -326,7 +326,6 @@ class PartnerUpdate(APIView):
                 shop.filename, shop.url, shop.last_update = request.data['filename'], url, timezone.now()
                 shop.save()
                 # Создаем или извлекаем категории
-                # TODO: Что, если поставщик укажет неверный id или название (чтобы не плодились одинаковые категории)
                 for category in read_data['categories']:
                     try:
                         category_object, _ = Category.objects.get_or_create(id=category['id'], name=category['name'])
@@ -341,9 +340,6 @@ class PartnerUpdate(APIView):
                     category_object.shops.add(shop.id)
                     category_object.save()
                 # Удаляем прошлые продукты
-                # TODO: Что будет с товарами в корзинах покупателей и в оформленных заказах после удаления?
-                #  Они удалятся.
-                #  Может их нужно обновлять?
                 ProductInfo.objects.filter(shop=shop.id).delete()
                 # Добавляем или извлекаем товары
                 for item in read_data['goods']:

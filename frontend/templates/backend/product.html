@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Товар: product.product.name{% endblock %}
+
+{% block content %}
+
+ <h1>{{ product.product.name }}</h1>
+
+         <h2>
+         Модель: {{ product.model }}
+         </h2>
+         <h2>
+         Цена: {{ product.price }}
+         </h2>
+         <h2>
+         В наличии: {{ product.quantity }}
+         </h2>
+        <h2>
+         Магазин: {{ product.shop }}
+        </h2>
+{#         <p class="date">#}
+{#         Published {{ post.publish }} by {{ post.author }}#}
+{#         </p>#}
+    <br>
+<form method="post">
+    {% csrf_token %}
+        {{ form }}
+        <input type="submit" value="Добавить в корзину">
+</form>
+{% endblock %}

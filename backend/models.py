@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from users.models import User, Contact
 
@@ -81,8 +84,8 @@ class ProductInfo(models.Model):
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, verbose_name='Магазин', related_name='product_info')
     model = models.CharField(max_length=128, verbose_name='Модель продукта')
     quantity = models.PositiveIntegerField(verbose_name='Количество продукта',)
-    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Цена')
-    price_rrc = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Рекомендуемая розничная цена')
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Цена', validators=[MinValueValidator(Decimal('0.01'))]),
+    price_rrc = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Рекомендуемая розничная цена', validators=[MinValueValidator(Decimal('0.01'))])
 
     class Meta:
         verbose_name = 'Информация о продукте'

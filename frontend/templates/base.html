@@ -1,0 +1,49 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>{% block title %}{% endblock %}</title>
+        <link href="{% static "css/blog.css" %}" rel="stylesheet">
+
+    </head>
+    <body>
+        <div id="content">
+            {% block content %}
+            {% endblock %}
+        </div>
+        <div id="sidebar">
+            <h2>Магазин розничной торгови</h2>
+                {% if request.user.is_authenticated %}
+                    <p>
+                        Здравствуейте, {{ request.user.email }}
+                    </p>
+                {% endif %}
+                {% if not request.user.is_authenticated  %}
+                    <p>
+                        <a href="{% url 'frontend:register' %}"> Регистрация </a>
+                    </p>
+                    <p>
+                        <a href="{% url 'frontend:login' %}"> Вход </a>
+                    </p>
+                    <p>
+                        <a href="{% url 'social:begin' 'vk-oauth2' %}"> Вход через VK </a>
+                    </p>
+                    <p>
+                        <a href="{% url 'social:begin' 'google-oauth2' %}"> Вход через Google </a>
+                    </p>
+                {% endif %}
+                <p>
+                    <a href="{% url 'frontend:products' %}"> Каталог </a>
+                </p>
+
+                <p>
+                    <a href="{% url 'frontend:basket' %}"> Корзина </a>
+                </p>
+                {% if request.user.is_authenticated %}
+                    <p>
+                        <a href="{% url 'frontend:logout' %}"> Выход </a>
+                    </p>
+                {% endif %}
+        </div>
+    </body>
+</html>

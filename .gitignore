@@ -125,5 +125,5 @@ venv
 
 backend/__pycache__
 users/__pycache__
-frontend
+frontend/__pycache__
 users/adress_base

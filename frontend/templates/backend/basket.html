@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Корзина{% endblock %}
+
+{% block content %}
+
+ <h1>Корзина</h1>
+    {% if request.user.is_authenticated %}
+         {% for item in orderitem %}
+             <h2>
+                 <h3>
+             Модель: {{ item.product_info.product.name }}
+                 </h3>
+                 <h3>
+             Количество: {{ item.quantity }} шт.
+             </h3>
+             <h3>
+             Магазин: {{ item.product_info.shop.name }} шт.
+                 </h3>
+             </h2>
+             <br>
+         {% endfor %}
+    {% else %}
+        <h2>
+        Вы не авторизованы
+        </h2>
+        <h3>
+            <a href="{% url 'frontend:login' %}">
+                Войти в систему
+            </a>
+        </h3>
+    {% endif %}
+{% endblock %}
