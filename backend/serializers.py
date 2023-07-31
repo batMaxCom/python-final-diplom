@@ -1,7 +1,9 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from rest_framework import serializers
 from backend.models import Category, Shop, Product, ProductInfo, ProductParameter, Order, OrderItem
 from users.serializers import ContactSerializer
-
 
 class ShopSerializer(serializers.ModelSerializer):
     class Meta:

@@ -41,9 +41,8 @@ class Shop(models.Model):
     name = models.CharField(max_length=128, verbose_name='Название магазина')
     url = models.URLField(verbose_name='Ссылка магазина', null=True, blank=True)
     filename = models.FileField(verbose_name='Файл с прайсом', blank=True,
-                                upload_to=None)  # Файл yaml с прайсом. Необходима возможность его обновления
+                                upload_to=None)
     last_update = models.DateTimeField(verbose_name='Последнее обновление прайса', null=True, blank=True)
-    # state = models.BooleanField(verbose_name='статус получения заказов', default=True) #как работает?
     user = models.OneToOneField(User, verbose_name='Поставщик', on_delete=models.CASCADE)
 
     class Meta:
@@ -84,8 +83,18 @@ class ProductInfo(models.Model):
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, verbose_name='Магазин', related_name='product_info')
     model = models.CharField(max_length=128, verbose_name='Модель продукта')
     quantity = models.PositiveIntegerField(verbose_name='Количество продукта',)
-    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Цена', validators=[MinValueValidator(Decimal('0.01'))]),
-    price_rrc = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Рекомендуемая розничная цена', validators=[MinValueValidator(Decimal('0.01'))])
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Цена',
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
+    price_rrc = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Рекомендуемая розничная цена',
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
 
     class Meta:
         verbose_name = 'Информация о продукте'

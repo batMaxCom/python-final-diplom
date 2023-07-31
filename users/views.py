@@ -1,16 +1,19 @@
 from smtplib import SMTPRecipientsRefused, SMTPDataError
+from rest_framework import serializers
 
 from django.http import JsonResponse
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.generics import CreateAPIView, RetrieveAPIView
+from rest_framework.generics import CreateAPIView, RetrieveAPIView, ListCreateAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
+import users.models
 from users.models import User, Contact
 from users.serializers import LoginSerializer, UserSerializer, ChangePasswordSerializer, \
     ResetPasswordSerializer, AccountDetailSerializer, ContactSerializer, EmailVerifySerializer, ChangeEmailSerializer, \
@@ -23,6 +26,15 @@ def serializer_error(serializer):
     return JsonResponse({'Status': False, 'valid_error': serializer.errors},
                                     status=status.HTTP_400_BAD_REQUEST)
 
+def response_fields(class_name):
+    response = {200: inline_serializer(
+            name=class_name +'SwagSerializer',
+            fields={
+                'Status': serializers.BooleanField(),
+                'Response': serializers.CharField()
+            })}
+    return response
+
 
 class RegisterAccountView(CreateAPIView):
     """
@@ -31,6 +43,22 @@ class RegisterAccountView(CreateAPIView):
     """
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Регистрация нового пользователя",
+        tags=['Account'],
+        request=inline_serializer(
+            name="InlineFormSerializer",
+            fields={
+                "email": serializers.EmailField(),
+                "password": serializers.CharField(),
+                "re_password": serializers.CharField(),
+                "company": serializers.CharField(),
+                "position": serializers.CharField(),
+                "type": serializers.ChoiceField(choices=users.models.USER_TYPE_CHOICES)
+                }
+        )
+    )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -48,6 +76,12 @@ class EmailVerifyView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Подтверждение электронной почты",
+        tags=['Account'],
+        request=EmailVerifySerializer,
+        responses=response_fields('EmailVerify')
+        )
     def post(self, request, *args, **kwargs):
         serializer = EmailVerifySerializer(data=request.data)
         if serializer.is_valid():
@@ -82,6 +116,12 @@ class LoginAccountView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Авторизация пользователя в приложении",
+        tags=['Account'],
+        request=LoginSerializer,
+        responses=response_fields('LoginAccount')
+    )
     def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -110,6 +150,8 @@ class LoginAccountView(APIView):
         else:
             return serializer_error(serializer)
 
+
+@extend_schema_view(get=extend_schema(summary='Детали аккаунта пользователя', tags=['Account']))
 class AccountDetailsView(RetrieveAPIView):
     """
     Класс для просмотра деталей аккаунта пользователя.
@@ -129,6 +171,11 @@ class ChangePasswordView(CreateAPIView):
     """
     serializer_class = ChangePasswordSerializer
 
+    @extend_schema(
+        summary="Изменение пароля пользователя",
+        tags=['Account'],
+        responses=response_fields('ChangePassword')
+    )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -157,6 +204,12 @@ class ResetPasswordView(CreateAPIView):
     throttle_scope = [AnonRateThrottle]
     serializer_class = ResetPasswordSerializer
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Сброс пароля пользователя",
+        tags=['Account'],
+        responses=response_fields('ResetPassword')
+    )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -186,6 +239,11 @@ class ChangeEmailView(CreateAPIView):
     """
     serializer_class = ChangeEmailSerializer
 
+    @extend_schema(
+        summary="Смена электронной почты пользователя",
+        tags=['Account'],
+        responses=response_fields('ChangeEmail')
+    )
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -219,6 +277,11 @@ class NewEmailConfirm(APIView):
     """
     serializer_class = ChangeEmailConfirmSerializer
 
+    @extend_schema(
+        summary="Подтверждение новой электронной почты пользователя",
+        tags=['Account'],
+        responses=response_fields('NewEmailConfirm')
+    )
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
@@ -244,11 +307,12 @@ class NewEmailConfirm(APIView):
 
 class ContactView(APIView):
     """
-    Класс для просотра, создания, изменения и удаления контактов.
+    Класс для индивидуального просмотра, изменения и удаления контактов.
     """
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
 
+    @extend_schema(summary="Просмотр адреса доставки пользователя", tags=['Contact.Retrieve'])
     def get(self, request,  *args, **kwargs):
         contact_id = kwargs.get('contact_id')
         if contact_id:
@@ -263,22 +327,7 @@ class ContactView(APIView):
             serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data)
 
-    # def post(self, request,  *args, **kwargs):
-    #     request.data._mutable = True
-    #     request.data.update({'user': request.user.id})
-    #     phone = request.data.get('phone')
-    #     if phone:
-    #         try:
-    #             int(request.data['phone'])
-    #         except ValueError:
-    #             return JsonResponse({'Status': False, 'phone_error': 'Пожалуйста проверте номер телефона. Он не должен содержать пробелов, букв или символов'}, status=status.HTTP_400_BAD_REQUEST)
-    #     serializer = self.serializer_class(data=request.data)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #         return Response(serializer.data)
-    #     else:
-    #         return serializer_error(serializer)
-
+    @extend_schema(summary="Изменение адреса доставки пользователя", tags=['Contact.Retrieve'])
     def patch(self, request,  *args, **kwargs):
         request.data._mutable = True
         request.data.update({'user': request.user.id})
@@ -295,6 +344,7 @@ class ContactView(APIView):
             return JsonResponse({'Status': False, 'contact_error': 'Контакт не найден.'},
                                 status=status.HTTP_404_NOT_FOUND)
 
+    @extend_schema(summary="Удаление адреса доставки пользователя", tags=['Contact.Retrieve'])
     def delete(self, request,  *args, **kwargs):
         contact_id = kwargs.get('contact_id')
         queryset = self.queryset.filter(id=contact_id, user_id=request.user.id)
@@ -307,15 +357,26 @@ class ContactView(APIView):
                                 status=status.HTTP_404_NOT_FOUND)
 
 
-    def post(self, request,  *args, **kwargs):
-        request.data._mutable = True
+
+@extend_schema_view(get=extend_schema(tags=['Contact'], summary="Просмотр всех адресов доставки пользователя"))
+class ContactViewList(ListCreateAPIView):
+    """
+    Класс для просмотра и создания контактов.
+    """
+    queryset = Contact.objects.all()
+    serializer_class = ContactSerializer
+
+    @extend_schema(summary="Создание адреса доставки пользователя", tags=['Contact'])
+    def post(self, request, *args, **kwargs):
         request.data.update({'user': request.user.id})
         phone = request.data.get('phone')
         if phone:
             try:
                 int(request.data['phone'])
             except ValueError:
-                return JsonResponse({'Status': False, 'phone_error': 'Пожалуйста проверте номер телефона. Он не должен содержать пробелов, букв или символов'}, status=status.HTTP_400_BAD_REQUEST)
+                return JsonResponse({'Status': False,
+                                     'phone_error': 'Пожалуйста проверте номер телефона. Он не должен содержать пробелов, букв или символов'},
+                                    status=status.HTTP_400_BAD_REQUEST)
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             serializer.save()

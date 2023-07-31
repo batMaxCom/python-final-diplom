@@ -578,7 +578,6 @@ paths:
       description: |-
         Класс для регистрации.
         Основной функционал прописан в сериализаторе.
-      summary: Регистрация нового пользователя
       tags:
       - api
       requestBody:
@@ -851,9 +850,7 @@ components:
           title: Количество продукта
         price:
           type: string
-          format: decimal
-          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-          title: Цена
+          readOnly: true
         price_rrc:
           type: string
           format: decimal
@@ -914,8 +911,6 @@ components:
           type: string
           writeOnly: true
           minLength: 6
-        re_password:
-          type: string
         company:
           type: string
           title: Компания
@@ -926,13 +921,11 @@ components:
           maxLength: 40
         is_active:
           type: boolean
-          readOnly: true
           title: Активный
           description: Отметьте, если пользователь должен считаться активным. Уберите
             эту отметку вместо удаления учётной записи.
         is_verified:
           type: boolean
-          readOnly: true
           description: Указывает, что адрес электронной почты подтвержден.
         type:
           allOf:
@@ -941,10 +934,7 @@ components:
       required:
       - email
       - id
-      - is_active
-      - is_verified
       - password
-      - re_password
   securitySchemes:
     basicAuth:
       type: http

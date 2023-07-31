@@ -10,6 +10,7 @@ from users.utils import generate_code
 from users.tasks import verifity_email_code_task
 
 
+
 error_messages = {
     "blank": "Поле не может быть пустым.",
     "required": "Это поле обязательно для заполнения.",
@@ -65,6 +66,7 @@ class AccountSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(AccountSerializer):
+
     class Meta:
         model = User
         fields = [
@@ -77,6 +79,7 @@ class UserSerializer(AccountSerializer):
             'is_verified',
             'type'
         ]
+        read_only_fields = ('is_active', 'is_verified')
 
     def create(self, validated_data):
         email = validated_data.get('email').lower()

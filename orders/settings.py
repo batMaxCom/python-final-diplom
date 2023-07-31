@@ -163,6 +163,11 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Сервис розничной торговли',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'ENUM_NAME_OVERRIDES': {
+        'UserTypeEnum': 'backend.models.USER_TYPE_CHOICES',
+        'StateOrderEnum': 'backend.models.STATE_ORDER_CHOICES',
+        'StateOrderItemEnum': 'backend.models.STATE_ORDERITEM_CHOICES'
+    }
     # OTHER SETTINGS
 }
 

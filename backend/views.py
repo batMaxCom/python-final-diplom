@@ -4,10 +4,11 @@ from django.db.models import Q, Sum, F
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema, OpenApiParameter, extend_schema_view, inline_serializer
 
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.exceptions import ValidationError
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView, get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -23,9 +24,10 @@ import yaml
 import os
 
 from users.permissions import IsShop
-from users.views import serializer_error
+from users.views import serializer_error, response_fields
 
 
+@extend_schema_view(get=extend_schema(summary='Просмотр категорий товаров', tags=['Category']))
 class CategoryView(ListAPIView):
     """
     Класс для просмотра категорий
@@ -34,7 +36,7 @@ class CategoryView(ListAPIView):
     serializer_class = CategoriesSerializer
     permission_classes = [AllowAny]
 
-
+@extend_schema_view(get=extend_schema(summary='Просмотр магазинов', tags=['Shops']))
 class ShopView(ListAPIView):
     """
     Класс для просмотра магазинов
@@ -43,22 +45,37 @@ class ShopView(ListAPIView):
     serializer_class = ShopSerializer
     permission_classes = [AllowAny]
 
-
+@extend_schema_view(get=extend_schema(
+    summary='Просмотр товара',
+    tags=['Product'],
+    parameters=[
+        OpenApiParameter(
+            name='shop_id',
+            location=OpenApiParameter.QUERY,
+            description='Сортировка по магазину',
+            required=False,
+            type=int
+        ),
+        OpenApiParameter(
+            name='category_id',
+            location=OpenApiParameter.QUERY,
+            description='Сортировка по категории',
+            required=False,
+            type=int
+        )
+    ]))
 class ProductView(ListAPIView):
     """
-    Класс для просмотра продуктов, с возможность сортировки по магазину или категории
+    Класс для просмотра продуктов, с возможность сортировки по магазину или категории.
+    При запросе с указанием ID продукта, в ответе выводится расширенный список параметров продукта.
     """
     serializer_class = ProductInfoListSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
         query = Q()
-        product_id = self.kwargs.get('product_id')
         shop_id = self.request.query_params.get('shop_id')
         category_id = self.request.query_params.get('category_id')
-        if product_id:
-            query = query & Q(id=product_id)
-            self.serializer_class = ProductInfoSerializer
         if shop_id:
             query = query & Q(shop_id=shop_id)
         if category_id:
@@ -67,10 +84,28 @@ class ProductView(ListAPIView):
         return queryset
 
 
+@extend_schema_view(get=(extend_schema(tags=['Product'], summary='Просмотр всех товаров')))
+class ProductViewRetrieve(RetrieveAPIView):
+    serializer_class = ProductInfoSerializer
+    permission_classes = [AllowAny]
+    queryset = ProductInfo.objects.all()
+
+    def get_object(self):
+        return get_object_or_404(self.queryset, id=self.kwargs["product_id"])
+
+
+
+
+
+
+
+
 class BasketView(APIView):
     """
     Класс для работы с корзиной покупателя
     """
+    serializer_class = OrderSerializer
+    @extend_schema(summary="Просмотр корзины пользователя", tags=['Basket'])
     def get(self, request, *args, **kwargs):
         basket = Order.objects.filter(
             user_id=request.user.id, status='basket').prefetch_related(
@@ -80,6 +115,24 @@ class BasketView(APIView):
         serializer = OrderSerializer(basket, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Создание корзины пользователя",
+        tags=['Basket'],
+        request=inline_serializer(
+            name="BasketGetSerializer",
+            fields={
+                "product_info": serializers.IntegerField(),
+                "quantity": serializers.IntegerField(),
+            }
+        ),
+        responses={
+            200: inline_serializer(
+                name='Basket_POST',
+                fields={
+                    'Обьекты добавленные в корзину': serializers.CharField(),
+                    'Ошибка добавления объектов': serializers.CharField()
+            })}
+    )
     def post(self, request, *args, **kwargs):
         items = request.data.get('items')
         if type(items) != list:
@@ -112,6 +165,23 @@ class BasketView(APIView):
             response.update({'Ошибка добавления объектов': error_created})
         return JsonResponse(response)
 
+    @extend_schema(
+        summary="Редактирование товаров в корзине пользователя",
+        tags=['Basket'],
+        request=inline_serializer(
+            name="BasketPutSerializer",
+            fields={
+                "product_info": serializers.IntegerField(),
+                "quantity": serializers.IntegerField(),
+            }
+        ),
+        responses={
+            200: inline_serializer(
+                name='Basket_PUT',
+                fields={
+                    'Обновленные объекты': serializers.CharField(),
+                })}
+    )
     def put(self, request, *args, **kwargs):
         items = request.data.get('items')
         if items:
@@ -144,6 +214,15 @@ class BasketView(APIView):
                 return JsonResponse({'Status': True, 'Обновленные объекты': objects_updated}, status=status.HTTP_200_OK)
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'}, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        summary="Удаление товаров в корзине пользователя",
+        tags=['Basket'],
+        request=inline_serializer(
+            name="BasketDeleteSerializer",
+            fields={
+                "product_info": serializers.IntegerField()
+            }),
+        responses=response_fields('Basket'))
     def delete(self, request, *args, **kwargs):
         items = request.data.get('items')
         if items:
@@ -180,7 +259,8 @@ class OrderView(APIView):
     """
     Класс для оформления и просмотра заказов покупателя
     """
-
+    serializer_class = OrderSerializer
+    @extend_schema(summary="Просмотр заказов пользователя", tags=['Order.Buyer'], request=None)
     def get(self, request, *args, **kwargs):
         order = Order.objects.filter(
             user_id=request.user.id).exclude(status='basket').prefetch_related(
@@ -188,9 +268,10 @@ class OrderView(APIView):
             'ordered_items__product_info__product_parameters__parameter').annotate(
             total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
 
-        serializer = OrderSerializer(order, many=True)
+        serializer = self.serializer_calss(order, many=True)
         return Response(serializer.data)
 
+    @extend_schema(summary="Оформление заказа пользователя", tags=['Order.Buyer'], responses=response_fields('Order'))
     def post(self, request, *args, **kwargs):
         contact = request.data.get('contact_id')
         try:
@@ -228,7 +309,12 @@ class PartnerState(APIView):
     Класс для изменения статуса заказа поставщиком
     """
     permission_classes = [*api_settings.DEFAULT_PERMISSION_CLASSES, IsShop]
-
+    serializer_class = StatusSerializer
+    @extend_schema(
+        summary="Изменение статуса достаки товара в заказе",
+        tags=['Order.Partner'],
+        responses=response_fields('PartnerState')
+        )
     def post(self, request, *args, **kwargs):
         order_items_id = kwargs.get('order_items_id')
         if order_items_id:
@@ -242,7 +328,7 @@ class PartnerState(APIView):
                     product_info__shop__user_id=request.user.id,
                     id=order_items_id).exclude(status='basket').prefetch_related(
                     'product_info__shop__user').distinct().first()
-                serializer = StatusSerializer(data={"id": order_items_id, "status": status}, instance=order_items)
+                serializer = self.serializer_class(data={"id": order_items_id, "status": status}, instance=order_items)
                 if order_items:
                     if serializer.is_valid():
                         serializer.save()
@@ -263,32 +349,39 @@ class PartnerOrders(APIView):
     Класс для просмотра заказов, в которых присутствуют товары поставщика
     """
     permission_classes = [*api_settings.DEFAULT_PERMISSION_CLASSES, IsShop]
+    serializer_class = OrderItemSerializer
 
+    @extend_schema(summary="Просмотр заказа переданных поставщику", tags=['Order.Partner'])
     def get(self, request, *args, **kwargs):
         order_id = kwargs.get('order_id')
-        if order_id:
-            order_items = OrderItem.objects.filter(
-                product_info__shop__user_id=request.user.id,
-                order_id=order_id).exclude(
-                order__status='basket').prefetch_related(
-                'product_info__shop__user',
-                'product_info__product__category',
-                'product_info__product_parameters__parameter',
-                'order').annotate(
-                total_sum=Sum(F('quantity') * F('product_info__price')))
-            if order_items.exists():
-                serializer = OrderItemSerializer(order_items, many=True)
-                return Response(serializer.data)
-            else:
-                return JsonResponse({'Status': False, 'Errors': 'Заказ не найден. Проверьте номер заказа.'})
-
-        else:
-            order = Order.objects.filter(
-                ordered_items__product_info__shop__user_id=request.user.id).exclude(status='basket').prefetch_related(
-                'ordered_items__product_info__shop__user').distinct()
-            serializer = OrderListSerializer(order, many=True)
-
+        order_items = OrderItem.objects.filter(
+            product_info__shop__user_id=request.user.id,
+            order_id=order_id).exclude(
+            order__status='basket').prefetch_related(
+            'product_info__shop__user',
+            'product_info__product__category',
+            'product_info__product_parameters__parameter',
+            'order').annotate(
+            total_sum=Sum(F('quantity') * F('product_info__price')))
+        if order_items.exists():
+            serializer = self.serializer_class(order_items, many=True)
             return Response(serializer.data)
+        else:
+            return JsonResponse({'Status': False, 'Errors': 'Заказ не найден. Проверьте номер заказа.'})
+
+
+@extend_schema_view(get=extend_schema(summary="Просмотр всех заказов переданных поставщику", tags=['Order.Partner']))
+class PartnerOrdersList(ListAPIView):
+    queryset = Order.objects.all()
+    serializer_class = OrderListSerializer
+    def get_queryset(self):
+        query = super().get_queryset()
+        return query.filter(ordered_items__product_info__shop__user_id=self.request.user.id)\
+            .exclude(status='basket')\
+            .prefetch_related('ordered_items__product_info__shop__user')\
+            .distinct()
+
+
 
 
 class PartnerUpdate(APIView):
@@ -297,6 +390,17 @@ class PartnerUpdate(APIView):
     """
     permission_classes = [*api_settings.DEFAULT_PERMISSION_CLASSES, IsShop]
 
+    @extend_schema(
+        summary="Создание/изменение прайса поставщика",
+        tags=['Price'],
+        request=inline_serializer(
+          name="PriceUpdateSerializer",
+          fields={
+              "url": serializers.URLField(),
+              "filename": serializers.FileField()
+    }
+        ),
+        responses=response_fields('PartnerUpdate'))
     def post(self, request):
         user = request.user
         url = request.data.get('url')
