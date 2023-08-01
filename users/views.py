@@ -63,7 +63,7 @@ class RegisterAccountView(CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return JsonResponse(serializer.data, status=status.HTTP_200_OK)
+            return JsonResponse(serializer.data, status=status.HTTP_201_CREATED)
         else:
             return serializer_error(serializer)
 
@@ -187,7 +187,7 @@ class ChangePasswordView(CreateAPIView):
             if not user.check_password(old_password):
                 return JsonResponse({'Status': False, 'old_password_error': 'Вы ввели неверный пароль.'}, status=status.HTTP_401_UNAUTHORIZED)
             if old_password == new_password:
-                return JsonResponse({'Status': False, 'new_password_error': 'Новый пароль не может совпадать со старым.'}, status=status.HTTP_401_UNAUTHORIZED)
+                return JsonResponse({'Status': False, 'new_password_error': 'Новый пароль не может совпадать со старым.'}, status=status.HTTP_400_BAD_REQUEST)
 
             user.set_password(new_password)
             user.changed_password_date = timezone.now()
@@ -329,7 +329,6 @@ class ContactView(APIView):
 
     @extend_schema(summary="Изменение адреса доставки пользователя", tags=['Contact.Retrieve'])
     def patch(self, request,  *args, **kwargs):
-        request.data._mutable = True
         request.data.update({'user': request.user.id})
         contact_id = kwargs.get('contact_id')
         queryset = self.queryset.filter(id=contact_id, user_id=request.user.id)
