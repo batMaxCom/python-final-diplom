@@ -6,7 +6,7 @@ from backend.views import CategoryView, ShopView, ProductView, PartnerUpdate, Ba
 app_name = 'backend'
 urlpatterns = [
     path('partner/update/', PartnerUpdate.as_view(), name='partner-update'),
-    path('partner/status/<int:order_id>', PartnerState.as_view(), name='partner-state'), #изменение статуса заказа
+    path('partner/status/<int:order_items_id>', PartnerState.as_view(), name='partner-state'), #изменение статуса заказа
     path('partner/orders/', PartnerOrdersList.as_view(), name='partner-orders_list'),
     path('partner/orders/<int:order_id>', PartnerOrders.as_view(), name='partner-orders'),
     path('categories/', CategoryView.as_view(), name='categories'),

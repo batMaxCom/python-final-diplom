@@ -1,5 +1,7 @@
+import json
+
 from django.core.validators import URLValidator
-from django.db import IntegrityError
+from django.db.utils import IntegrityError
 from django.db.models import Q, Sum, F
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -7,9 +9,10 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter, extend_schema_view, inline_serializer
 
 from rest_framework import status, serializers
-from rest_framework.exceptions import ValidationError
+from django.core.exceptions import ValidationError
 from rest_framework.generics import ListAPIView, RetrieveAPIView, get_object_or_404
 from rest_framework.permissions import AllowAny
+from rest_framework.validators import UniqueTogetherValidator
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
@@ -22,7 +25,9 @@ from backend.tasks import update_state_message_task, send_order_buyer_task, send
 
 import yaml
 import os
+from ujson import loads as load_json
 
+from users.models import Contact
 from users.permissions import IsShop
 from users.views import serializer_error, response_fields
 
@@ -94,12 +99,6 @@ class ProductViewRetrieve(RetrieveAPIView):
         return get_object_or_404(self.queryset, id=self.kwargs["product_id"])
 
 
-
-
-
-
-
-
 class BasketView(APIView):
     """
     Класс для работы с корзиной покупателя
@@ -136,34 +135,35 @@ class BasketView(APIView):
     def post(self, request, *args, **kwargs):
         items = request.data.get('items')
         if type(items) != list:
-            return JsonResponse({'Status': False, 'value_error': 'Неверный формат запроса. Ожидается список товаров.'}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({'Status': False, 'value_error': 'Неверный формат запроса. Ожидается список товаров.'},
+                                status=status.HTTP_400_BAD_REQUEST)
         if not items:
-            return JsonResponse({'Status': False, 'value_error': 'Список товаров пуст. Пожалуйста выберите товары из каталога'}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse(
+                {'Status': False, 'value_error': 'Список товаров пуст. Пожалуйста выберите товары из каталога'},
+                status=status.HTTP_400_BAD_REQUEST)
         order, _ = Order.objects.get_or_create(user_id=request.user.id, status='basket')
         objects_created = []
-        error_created = []
-        for order_item in items:
-            order_item.update({'order': order.id})
-            serializer = OrderItemSerializer(data=order_item)
+        error_message = {"Status": False, 'error':[]}
+        for product_info_item in items:
+            product_info_item.update({'order': order.id})
+            serializer = OrderItemSerializer(data=product_info_item, validators=[
+            UniqueTogetherValidator(
+                queryset=OrderItem.objects.all(),
+                fields=['order', 'product_info'], message='Товар уже добавлен в корзину'
+            )
+        ])
             if serializer.is_valid():
-                try:
-                    serializer.save()
-                except IntegrityError:
-                    order_item.update({'error': 'Товар уже добавлен в корзину.'})
-                    error_created.append(order_item)
-                except ValueError as error:
-                    return JsonResponse({'Status': False, 'valuer_error': error}, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    objects_created.append(serializer.data)
+                objects_created.append(serializer)
             else:
-                order_item.update({'error': serializer.errors})
-                error_created.append(order_item)
-        response = {}
-        if bool(objects_created):
-            response.update({'Обьекты добавленные в корзину': objects_created})
-        if bool(error_created):
-            response.update({'Ошибка добавления объектов': error_created})
-        return JsonResponse(response)
+                error_message['error'].append({"product_id": product_info_item['product_info'], 'error': serializer.errors})
+        if bool(error_message['error']):
+            return JsonResponse(error_message, status=400)
+        response = []
+        for serializer in objects_created:
+            serializer.is_valid()
+            serializer.save()
+            response.append(serializer.data)
+        return JsonResponse({"Status":True, "Response":response}, status=200)
 
     @extend_schema(
         summary="Редактирование товаров в корзине пользователя",
@@ -189,7 +189,7 @@ class BasketView(APIView):
                 return JsonResponse({'Status': False, 'value_error': 'Неверный формат запроса. Ожидается список товаров.'}, status=status.HTTP_400_BAD_REQUEST)
             basket, _ = Order.objects.get_or_create(user_id=request.user.id, status='basket')
             serializer_list = []
-            error_updated = []
+            error_updated = {'Status': False, 'error': []}
             for order_item in items:
                 order_item.update({'order': basket.id})
                 serializer = OrderItemSerializer(data=order_item)
@@ -201,17 +201,15 @@ class BasketView(APIView):
                     serializer.instance = instance.first()
                     serializer_list.append(serializer)
                 else:
-                    order_item.update({'error': serializer.errors})
-                    error_updated.append(order_item)
-            if bool(error_updated):
-                return JsonResponse({'Status': False, 'update_error': error_updated}, status=status.HTTP_400_BAD_REQUEST)
-            elif len(items) == len(serializer_list):
-                objects_updated = []
-                for obj in serializer_list:
-                    obj.is_valid()
-                    obj.save()
-                    objects_updated.append(obj.data)
-                return JsonResponse({'Status': True, 'Обновленные объекты': objects_updated}, status=status.HTTP_200_OK)
+                    error_updated['error'].append(serializer.errors)
+            if bool(error_updated['error']):
+                return JsonResponse(error_updated, status=status.HTTP_400_BAD_REQUEST)
+            response = {'Status': True, 'update_object': []}
+            for serializer in serializer_list:
+                serializer.is_valid()
+                serializer.save()
+                response['update_object'].append(serializer.data)
+            return JsonResponse(response, status=status.HTTP_200_OK)
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'}, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
@@ -267,8 +265,7 @@ class OrderView(APIView):
             'ordered_items__product_info__product__category',
             'ordered_items__product_info__product_parameters__parameter').annotate(
             total_sum=Sum(F('ordered_items__quantity') * F('ordered_items__product_info__price'))).distinct()
-
-        serializer = self.serializer_calss(order, many=True)
+        serializer = self.serializer_class(order, many=True)
         return Response(serializer.data)
 
     @extend_schema(summary="Оформление заказа пользователя", tags=['Order.Buyer'], responses=response_fields('Order'))
@@ -287,17 +284,17 @@ class OrderView(APIView):
                             return JsonResponse(
                                 {'Status': False,
                                  'quantity_error': f'У поставщика больше нет такого количества товара. Вы можете заказать не более {obj.product_info.quantity} единиц.'}, status=status.HTTP_400_BAD_REQUEST)
-                    try:
+                    c = Contact.objects.filter(id=contact, user_id=request.user.id)
+                    if c.exists():
                         update_object.update(status='placed', contact=contact)
-                    except IntegrityError:
-                        return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'}, status=status.HTTP_400_BAD_REQUEST)
                     else:
-                        send_order_buyer_task.delay(request.user.email, order.id)
-                        order.quantity_and_status_update()
-                        partner_email = list(order.ordered_items.all().values_list("product_info__shop__user__email", flat=True).distinct())
-                        for email in partner_email:
-                            send_order_partner_task.delay(email, order.id)
-                        return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'}, status=status.HTTP_200_OK)
+                        return JsonResponse({'Status': False, 'contact_error': 'Неверно указанеы контакты пользователя.'}, status=status.HTTP_400_BAD_REQUEST)
+                    send_order_buyer_task.delay(request.user.email, order.id)
+                    order.quantity_and_status_update()
+                    partner_email = list(order.ordered_items.all().values_list("product_info__shop__user__email", flat=True).distinct())
+                    for email in partner_email:
+                        send_order_partner_task.delay(email, order.id)
+                    return JsonResponse({'Status': True, 'Response': f'Заказ успешно подтвержден.'}, status=status.HTTP_200_OK)
                 else:
                     return JsonResponse({'Status': False, 'contact_error': 'Контакты пользователя не указаны.'}, status=status.HTTP_400_BAD_REQUEST)
             else:
@@ -326,13 +323,13 @@ class PartnerState(APIView):
             else:
                 order_items = OrderItem.objects.filter(
                     product_info__shop__user_id=request.user.id,
-                    id=order_items_id).exclude(status='basket').prefetch_related(
+                    id=order_items_id).prefetch_related(
                     'product_info__shop__user').distinct().first()
                 serializer = self.serializer_class(data={"id": order_items_id, "status": status}, instance=order_items)
                 if order_items:
                     if serializer.is_valid():
                         serializer.save()
-                        update_state_message_task.delay(order_items)
+                        # update_state_message_task.delay(order_items)
                         order = order_items.order
                         order.status_check()
                         return JsonResponse({'Status': True,
@@ -411,7 +408,7 @@ class PartnerUpdate(APIView):
             try:
                 validate_url(url)
             except ValidationError as e:
-                return JsonResponse({'Status': False, 'url_error': str(e)})
+                return JsonResponse({'Status': False, 'url_error': str(e)}, status=400)
         # Проверка валидности пути к файлу прайса
         if filename:
             try:

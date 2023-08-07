@@ -2,7 +2,10 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from rest_framework import serializers
-from backend.models import Category, Shop, Product, ProductInfo, ProductParameter, Order, OrderItem
+from rest_framework.validators import UniqueTogetherValidator
+
+from backend.models import Category, Shop, Product, ProductInfo, ProductParameter, Order, OrderItem, \
+    STATE_ORDERITEM_CHOICES
 from users.serializers import ContactSerializer
 
 class ShopSerializer(serializers.ModelSerializer):
@@ -54,16 +57,24 @@ class ProductInfoListSerializer(serializers.ModelSerializer):
         read_only_fields = ('id',)
 
 
+# class OrderItemSerializer(serializers.ModelSerializer):
+#     order_items_id = serializers.IntegerField(source='id')
+#     quantity = serializers.IntegerField(min_value=1)
+#     product_info = ProductInfoSerializer()
+#     total_sum = serializers.IntegerField()
+#
+#     class Meta:
+#         model = OrderItem
+#         fields = ['order_items_id', 'order', 'status', 'product_info', 'quantity', 'total_sum']
+#         read_only_fields = ('order_items_id', 'order')
+
 class OrderItemSerializer(serializers.ModelSerializer):
-    order_items_id = serializers.IntegerField(source='id')
     quantity = serializers.IntegerField(min_value=1)
-    product_info = ProductInfoSerializer()
-    total_sum = serializers.IntegerField()
 
     class Meta:
         model = OrderItem
-        fields = ['order_items_id', 'order', 'status', 'product_info', 'quantity', 'total_sum']
-        read_only_fields = ('order_items_id', 'order')
+        fields = ['id', 'order', 'product_info', 'quantity']
+        read_only_fields = ('id',)
 
     def update(self, instance, validated_data):
         instance.quantity = validated_data.get("quantity", instance.quantity)
@@ -109,9 +120,11 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class StatusSerializer(serializers.ModelSerializer):
+    status = serializers.ChoiceField(choices=STATE_ORDERITEM_CHOICES)
+
     class Meta:
         model = OrderItem
-        fields = ['status']
+        fields = ['status', 'id', 'order', 'product_info', 'quantity']
         read_only_fields = ('id', 'order', 'product_info', 'quantity')
 
     def update(self, instance, validated_data):

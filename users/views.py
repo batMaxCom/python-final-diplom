@@ -315,25 +315,28 @@ class ContactView(APIView):
     @extend_schema(summary="Просмотр адреса доставки пользователя", tags=['Contact.Retrieve'])
     def get(self, request,  *args, **kwargs):
         contact_id = kwargs.get('contact_id')
-        if contact_id:
-            queryset = self.queryset.filter(id=contact_id, user_id=request.user.id)
-            if queryset.exists():
-                serializer = self.serializer_class(queryset.first())
-            else:
-                return JsonResponse({'Status': False, 'contact_error': 'Контакт не найден.'},
-                                    status=status.HTTP_404_NOT_FOUND)
+        queryset = self.queryset.filter(id=contact_id, user_id=request.user.id)
+        if queryset.exists():
+            serializer = self.serializer_class(queryset.first())
         else:
-            queryset = self.queryset.filter(user_id=request.user.id)
-            serializer = self.serializer_class(queryset, many=True)
+            return JsonResponse({'Status': False, 'contact_error': 'Контакт не найден.'},
+                                status=status.HTTP_404_NOT_FOUND)
+
         return Response(serializer.data)
 
     @extend_schema(summary="Изменение адреса доставки пользователя", tags=['Contact.Retrieve'])
     def patch(self, request,  *args, **kwargs):
-        request.data.update({'user': request.user.id})
+        try:
+            data = request.data
+            data.update({'user': request.user.id})
+        except AttributeError:
+            data = request.data
+            data._mutable = True
+            data.update({'user': request.user.id})
         contact_id = kwargs.get('contact_id')
         queryset = self.queryset.filter(id=contact_id, user_id=request.user.id)
         if queryset.exists():
-            serializer = ContactSerializer(data=request.data, instance=queryset.first(), partial=True)
+            serializer = ContactSerializer(data=data, instance=queryset.first(), partial=True)
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -362,12 +365,21 @@ class ContactViewList(ListCreateAPIView):
     """
     Класс для просмотра и создания контактов.
     """
-    queryset = Contact.objects.all()
     serializer_class = ContactSerializer
+
+    def get_queryset(self):
+        query = Contact.objects.filter(user_id=self.request.user.id)
+        return query
 
     @extend_schema(summary="Создание адреса доставки пользователя", tags=['Contact'])
     def post(self, request, *args, **kwargs):
-        request.data.update({'user': request.user.id})
+        try:
+            data = request.data
+            data.update({'user': request.user.id})
+        except AttributeError:
+            data = request.data
+            data._mutable = True
+            data.update({'user': request.user.id})
         phone = request.data.get('phone')
         if phone:
             try:
@@ -376,7 +388,7 @@ class ContactViewList(ListCreateAPIView):
                 return JsonResponse({'Status': False,
                                      'phone_error': 'Пожалуйста проверте номер телефона. Он не должен содержать пробелов, букв или символов'},
                                     status=status.HTTP_400_BAD_REQUEST)
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

@@ -6,4 +6,7 @@ omit=
     frontend/*,
     */migrations/*.py,
     *tests.py,
-    manage.py
+    manage.py,
+    reference/*,
+    project_description/*
+
