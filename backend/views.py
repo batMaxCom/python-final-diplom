@@ -25,7 +25,6 @@ from backend.tasks import update_state_message_task, send_order_buyer_task, send
 
 import yaml
 import os
-from ujson import loads as load_json
 
 from users.models import Contact
 from users.permissions import IsShop
@@ -85,7 +84,7 @@ class ProductView(ListAPIView):
             query = query & Q(shop_id=shop_id)
         if category_id:
             query = query & Q(product__category_id=category_id)
-        queryset = ProductInfo.objects.filter(query).prefetch_related("product__category")
+        queryset = ProductInfo.objects.filter(query).select_related('product__category', 'shop')
         return queryset
 
 
@@ -96,7 +95,7 @@ class ProductViewRetrieve(RetrieveAPIView):
     queryset = ProductInfo.objects.all()
 
     def get_object(self):
-        return get_object_or_404(self.queryset, id=self.kwargs["product_id"])
+        return get_object_or_404(self.queryset.select_related('product__category', 'shop').prefetch_related('product_parameters__parameter'), id=self.kwargs["product_id"])
 
 
 class BasketView(APIView):
@@ -329,7 +328,7 @@ class PartnerState(APIView):
                 if order_items:
                     if serializer.is_valid():
                         serializer.save()
-                        # update_state_message_task.delay(order_items)
+                        update_state_message_task.delay(order_items.id)
                         order = order_items.order
                         order.status_check()
                         return JsonResponse({'Status': True,

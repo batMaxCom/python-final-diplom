@@ -3,14 +3,15 @@ from celery import shared_task
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
-from backend.models import Order
+from backend.models import Order, OrderItem
 
 
 @shared_task
-def update_state_message_task(order):
+def update_state_message_task(order_items_id):
     """
     Отправка сообщения об изменении статуса заказа
     """
+    order = OrderItem.objects.get(id=order_items_id)
     message = f'Изменен статус заказа: {order.id}\n' \
               f'Новый статус "{order.get_status_display()}".'
 
