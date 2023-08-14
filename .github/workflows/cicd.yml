@@ -55,3 +55,10 @@ jobs:
           python manage.py migrate
       - name: Тестирование
         run: python -m pytest
+      - name: Деплой
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: expect /home/bat_max_server/python-final-diplom/pull.exp
