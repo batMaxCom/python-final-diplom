@@ -43,7 +43,6 @@ jobs:
           --health-retries 5
       redis_main:
         image: "redis:alpine"
-        command: redis-server
         ports:
           - "6379:6379"
     steps:
