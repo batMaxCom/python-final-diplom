@@ -162,7 +162,7 @@ class BasketView(APIView):
             serializer.is_valid()
             serializer.save()
             response.append(serializer.data)
-        return JsonResponse({"Status":True, "Response":response}, status=200)
+        return JsonResponse({"Status": True, "Response": response}, status=200)
 
     @extend_schema(
         summary="Редактирование товаров в корзине пользователя",

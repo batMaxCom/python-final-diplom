@@ -321,3 +321,7 @@ def test_contact_update(client, contact, verified_user, token_1,
         headers={'Authorization': token_1}
     )
     assert response.status_code == status_code
+
+
+def test_example():
+    assert 1 == 1
