@@ -55,18 +55,3 @@ jobs:
           python manage.py migrate
       - name: Тестирование
         run: python -m pytest
-        env:
-          SECRET_KEY: ${{ env.SECRET_KEY }}
-          ALLOWED_HOSTS: ${{ env.ALLOWED_HOSTS }}
-          DB_ENGINE: ${{ env.DB_ENGINE }}
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_NAME: ${{ env.DB_NAME }}
-          DB_PASSWORD: ${{ env.DB_PASSWORD }}
-          DB_PORT: ${{ env.DB_PORT }}
-          DB_USER: ${{ env.DB_USER }}
-          DEBUG: ${{ env.DEBUG }}
-          EMAIL_HOST: ${{ env.EMAIL_HOST }}
-          EMAIL_HOST_USER: ${{ env.EMAIL_HOST_USER }}
-          EMAIL_HOST_PASSWORD: ${{ env.EMAIL_HOST_PASSWORD }}
-          EMAIL_PORT: ${{ env.EMAIL_PORT}}
-          EMAIL_USE_SSL: ${{ env.EMAIL_USE_SSL }}
