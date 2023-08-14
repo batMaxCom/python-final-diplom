@@ -1,0 +1,70 @@
+name: Автоматическое тестирование и развертывание проекта
+on:
+  push:
+    branches: [cicl]
+jobs:
+  tests:
+    runs-on: ubuntu-20.04
+    env:
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+      DB_ENGINE: ${{ secrets.DB_ENGINE }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DEBUG: ${{ secrets.DEBUG }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      EMAIL_PORT: ${{ secrets.DEBUGEMAIL_PORT}}
+      EMAIL_USE_SSL: ${{ secrets.EMAIL_USE_SSL }}
+      SOCIAL_AUTH_VK_OAUTH_KEY: ${{ secrets.SOCIAL_AUTH_VK_OAUTH_KEY }}
+      SOCIAL_AUTH_VK_OAUTH_SECRET: ${{ secrets.SOCIAL_AUTH_VK_OAUTH_SECRET }}
+      SOCIAL_AUTH_GOOGLE_OAUTH2_KEY: ${{ secrets.DEBSOCIAL_AUTH_GOOGLE_OAUTH2_KEYUG }}
+      SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET: ${{ secrets.SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET }}
+    services:
+      postgres_main:
+        image: postgres:12
+        env:
+          POSTGRES_DB: ${{ env.DB_NAME }}
+          POSTGRES_USER: ${{ env.DB_USER }}
+          POSTGRES_PASSWORD: ${{ env.DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options:
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Проверяем репозиторий на наличие изменений
+        uses: actions/checkout@v3
+      - name: Установить python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.10
+      - name: Установка зависимостей
+        run: pip install -r requirements.txt
+      - name: Тестирование
+        run: pytest
+        env:
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          ALLOWED_HOSTS: ${{ env.ALLOWED_HOSTS }}
+          DB_ENGINE: ${{ env.DB_ENGINE }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_NAME: ${{ env.DB_NAME }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
+          DB_PORT: ${{ env.DB_PORT }}
+          DB_USER: ${{ env.DB_USER }}
+          DEBUG: ${{ env.DEBUG }}
+          EMAIL_HOST: ${{ env.EMAIL_HOST }}
+          EMAIL_HOST_USER: ${{ env.EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD: ${{ env.EMAIL_HOST_PASSWORD }}
+          EMAIL_PORT: ${{ env.DEBUGEMAIL_PORT}}
+          EMAIL_USE_SSL: ${{ env.EMAIL_USE_SSL }}
+          SOCIAL_AUTH_VK_OAUTH_KEY: ${{ env.SOCIAL_AUTH_VK_OAUTH_KEY }}
+          SOCIAL_AUTH_VK_OAUTH_SECRET: ${{ env.SOCIAL_AUTH_VK_OAUTH_SECRET }}
+          SOCIAL_AUTH_GOOGLE_OAUTH2_KEY: ${{ env.DEBSOCIAL_AUTH_GOOGLE_OAUTH2_KEYUG }}
+          SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET: ${{ env.SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET }}
