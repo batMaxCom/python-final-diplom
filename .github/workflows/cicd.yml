@@ -1,7 +1,7 @@
 name: Автоматическое тестирование и развертывание проекта
 on:
   push:
-    branches: [cicl]
+    branches: [cicd]
 jobs:
   tests:
     runs-on: ubuntu-20.04
