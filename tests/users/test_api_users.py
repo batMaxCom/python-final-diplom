@@ -324,4 +324,4 @@ def test_contact_update(client, contact, verified_user, token_1,
 
 
 def test_example():
-    assert 1 == 1
+    assert 2 == 2
