@@ -65,9 +65,6 @@ jobs:
           DB_PORT: ${{ env.DB_PORT }}
           DB_USER: ${{ env.DB_USER }}
           DEBUG: ${{ env.DEBUG }}
-          POSTGRES_DB: ${{ env.DB_NAME }}
-          POSTGRES_USER: ${{ env.DB_USER }}
-          POSTGRES_PASSWORD: ${{ env.DB_PASSWORD }}
           EMAIL_HOST: ${{ env.EMAIL_HOST }}
           EMAIL_HOST_USER: ${{ env.EMAIL_HOST_USER }}
           EMAIL_HOST_PASSWORD: ${{ env.EMAIL_HOST_PASSWORD }}
