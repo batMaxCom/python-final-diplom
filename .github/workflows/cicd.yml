@@ -24,16 +24,16 @@ jobs:
       SOCIAL_AUTH_VK_OAUTH_SECRET: ${{ secrets.SOCIAL_AUTH_VK_OAUTH_SECRET }}
       SOCIAL_AUTH_GOOGLE_OAUTH2_KEY: ${{ secrets.SOCIAL_AUTH_GOOGLE_OAUTH2_KEYUG }}
       SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET: ${{ secrets.SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET }}
-      POSTGRES_DB: ${{ env.DB_NAME }}
-      POSTGRES_USER: ${{ env.DB_USER }}
-      POSTGRES_PASSWORD: ${{ env.DB_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
     services:
       postgres_main:
         image: postgres:12
         env:
-          POSTGRES_DB: ${{ env.DB_NAME }}
-          POSTGRES_USER: ${{ env.DB_USER }}
-          POSTGRES_PASSWORD: ${{ env.DB_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
         ports:
           - 5432:5432
         options:
@@ -62,9 +62,9 @@ jobs:
           DB_PORT: ${{ env.DB_PORT }}
           DB_USER: ${{ env.DB_USER }}
           DEBUG: ${{ env.DEBUG }}
-          POSTGRES_DB: ${{ env.DB_NAME }}
-          POSTGRES_USER: ${{ env.DB_USER }}
-          POSTGRES_PASSWORD: ${{ env.DB_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
           EMAIL_HOST: ${{ env.EMAIL_HOST }}
           EMAIL_HOST_USER: ${{ env.EMAIL_HOST_USER }}
           EMAIL_HOST_PASSWORD: ${{ env.EMAIL_HOST_PASSWORD }}
