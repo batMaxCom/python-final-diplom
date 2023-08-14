@@ -44,7 +44,7 @@ jobs:
       - name: Установить python
         uses: actions/setup-python@v2
         with:
-          python-version: 3.10
+          python-version: '3.10'
       - name: Установка зависимостей
         run: pip install -r requirements.txt
       - name: Тестирование
