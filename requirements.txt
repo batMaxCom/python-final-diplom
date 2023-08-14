@@ -24,9 +24,11 @@ django-rest-framework-social-oauth2==1.1.0
 django-widget-tweaks==1.4.12
 djangorestframework==3.14.0
 drf-spectacular==0.26.4
+exceptiongroup==1.1.2
 gunicorn==21.2.0
 idna==3.4
 inflection==0.5.1
+iniconfig==2.0.0
 jsonschema==4.19.0
 jsonschema-specifications==2023.7.1
 jwcrypto==1.5.0
@@ -35,11 +37,14 @@ oauthlib==3.2.2
 packaging==23.1
 parts==1.6.0
 Pillow==10.0.0
+pluggy==1.2.0
 products==1.2.0
 prompt-toolkit==3.0.39
 psycopg2-binary==2.9.1
 pycparser==2.21
 PyJWT==2.8.0
+pytest==7.4.0
+pytest-django==4.5.2
 python-dateutil==2.8.2
 python-dotenv==1.0.0
 python-social-auth==0.3.6
@@ -55,6 +60,7 @@ six==1.16.0
 social-auth-app-django==5.2.0
 social-auth-core==4.4.2
 sqlparse==0.4.4
+tomli==2.0.1
 typing_extensions==4.6.2
 tzdata==2023.3
 uritemplate==4.1.1
