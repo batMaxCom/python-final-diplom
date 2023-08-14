@@ -51,7 +51,7 @@ jobs:
           source venv/bin/activate
           pip install -r requirements.txt
       - name: Тестирование
-        run: pytest
+        run: python -m pytest
         env:
           SECRET_KEY: ${{ env.SECRET_KEY }}
           ALLOWED_HOSTS: ${{ env.ALLOWED_HOSTS }}
