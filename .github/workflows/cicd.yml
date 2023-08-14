@@ -46,10 +46,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Установка зависимостей
-        run: |
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
       - name: Тестирование
         run: python -m pytest
         env:
